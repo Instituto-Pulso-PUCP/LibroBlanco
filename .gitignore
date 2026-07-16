@@ -1,2 +1,4 @@
 *.csv
 *.db
+*.json
+LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/salidas/00_ground_truth_metrics_slide.md

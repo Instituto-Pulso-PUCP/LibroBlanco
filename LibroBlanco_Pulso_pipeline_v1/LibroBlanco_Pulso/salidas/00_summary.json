@@ -20,5 +20,14 @@
   "ground_truth_publication_pairs": 382,
   "candidate_pairs_confirmed_by_ground_truth": 250,
   "candidate_precision_vs_ground_truth_pct": 2.85,
-  "ground_truth_recall_by_candidates_pct": 65.45
+  "ground_truth_recall_by_candidates_pct": 65.45,
+  "ground_truth_linked_rows": 386,
+  "ground_truth_linked_rows_pct": 13.27,
+  "ground_truth_linked_projects": 202,
+  "ground_truth_linked_projects_pct": 55.96,
+  "ground_truth_linked_top_result_type": "Artículo indizado",
+  "efficacy_high_precision_pct": 3.39,
+  "efficacy_high_recall_pct": 61.26,
+  "efficacy_medium_precision_pct": 0.85,
+  "efficacy_medium_recall_pct": 4.19
 }
