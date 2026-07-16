@@ -1,8 +1,21 @@
 
 from pathlib import Path
+import os
 import sqlite3, re, unicodedata, json
 from difflib import SequenceMatcher
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+import time, math, random
 import pandas as pd
+
+OPENALEX_API_KEY = os.getenv('OPENALEX_API_KEY', '').strip()
+OPENALEX_MAILTO = os.getenv('OPENALEX_MAILTO', '').strip()
+# Rate limiting and retry/backoff configuration for OpenAlex queries
+OPENALEX_RATE_LIMIT_SECONDS = float(os.getenv('OPENALEX_RATE_LIMIT_SECONDS', '3.0'))
+OPENALEX_MAX_RETRIES = int(os.getenv('OPENALEX_MAX_RETRIES', '4'))
+OPENALEX_BACKOFF_FACTOR = float(os.getenv('OPENALEX_BACKOFF_FACTOR', '2.0'))
+OPENALEX_JITTER_SECONDS = float(os.getenv('OPENALEX_JITTER_SECONDS', '0.5'))
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
@@ -94,6 +107,205 @@ def title_score(proj_title, pub_title):
     seq = SequenceMatcher(None, nt1, nt2).ratio() if nt1 and nt2 else 0
     jac = token_jaccard(proj_title, pub_title)
     return round(max(seq*0.5, jac), 4)
+
+def build_openalex_query(doi=None, title=None):
+    doi_norm = norm_doi(doi)
+    params = []
+    if OPENALEX_API_KEY:
+        params.append(("api_key", OPENALEX_API_KEY))
+    if OPENALEX_MAILTO:
+        params.append(("mailto", OPENALEX_MAILTO))
+
+    def build_query(base, query_params):
+        if not query_params:
+            return base
+        qs = '&'.join(f"{quote(str(k))}={quote(str(v))}" for k, v in query_params)
+        return f"{base}?{qs}"
+
+    if doi_norm:
+        return build_query(f"https://api.openalex.org/works/doi:{doi_norm}", params)
+    title_norm = str(title or "").strip()
+    if title_norm:
+        query_params = [("search", title_norm), ("per-page", 1)] + params
+        return build_query("https://api.openalex.org/works", query_params)
+    return ""
+
+
+def extract_openalex_enrichment(payload, doi=None, title=None):
+    payload = payload or {}
+    location = payload.get("primary_location") or {}
+    oa_location = payload.get("best_oa_location") or location
+    oa_meta = payload.get("open_access") or {}
+    is_oa = bool(oa_meta.get("is_oa") if isinstance(oa_meta, dict) else False) or bool(location.get("is_oa") or False)
+    oa_status = oa_meta.get("oa_status") or ("green" if is_oa else "closed")
+    oa_url = (oa_location or {}).get("landing_page_url") or (location or {}).get("landing_page_url") or ""
+    source_name = ((oa_location or {}).get("source") or {}).get("display_name") or ((location or {}).get("source") or {}).get("display_name") or ""
+    authors = []
+    for item in payload.get("authorships") or []:
+        author = item.get("author") or {}
+        name = author.get("display_name")
+        if name:
+            authors.append(name)
+    suggested_fields = []
+    if payload.get("doi"):
+        suggested_fields.append("openalex_doi")
+    if payload.get("publication_year") is not None:
+        suggested_fields.append("openalex_publication_year")
+    if payload.get("cited_by_count") is not None:
+        suggested_fields.append("openalex_cited_by_count")
+    if source_name:
+        suggested_fields.append("openalex_source_display_name")
+    if authors:
+        suggested_fields.append("openalex_authors")
+    if oa_status:
+        suggested_fields.append("openalex_oa_status")
+    if oa_url:
+        suggested_fields.append("openalex_oa_url")
+    return {
+        'openalex_query': build_openalex_query(doi=doi, title=title),
+        'openalex_work_id': payload.get('id', ''),
+        'openalex_doi': payload.get('doi', ''),
+        'openalex_is_oa': is_oa,
+        'openalex_oa_status': oa_status,
+        'openalex_oa_url': oa_url,
+        'openalex_publication_year': payload.get('publication_year'),
+        'openalex_cited_by_count': payload.get('cited_by_count'),
+        'openalex_source_display_name': source_name,
+        'openalex_authors': '; '.join(authors),
+        'openalex_suggested_fields': suggested_fields,
+        'openalex_enrichment_error': '',
+        'openalex_enrichment_raw_json': json.dumps(payload, ensure_ascii=False)
+    }
+
+
+def fetch_openalex_enrichment(doi=None, title=None, timeout=10):
+    query = build_openalex_query(doi=doi, title=title)
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    if OPENALEX_API_KEY:
+        # OpenAlex expects api_key in query params (we already add it there), but include Authorization for proxies that accept it
+        headers['Authorization'] = f"Bearer {OPENALEX_API_KEY}"
+    if OPENALEX_MAILTO:
+        headers['mailto'] = OPENALEX_MAILTO
+    if not query:
+        return {
+            'openalex_query': '',
+            'openalex_work_id': '',
+            'openalex_doi': '',
+            'openalex_is_oa': False,
+            'openalex_oa_status': 'unknown',
+            'openalex_oa_url': '',
+            'openalex_publication_year': None,
+            'openalex_cited_by_count': None,
+            'openalex_source_display_name': '',
+            'openalex_authors': '',
+            'openalex_suggested_fields': [],
+            'openalex_enrichment_error': 'missing doi or title',
+            'openalex_enrichment_raw_json': ''
+        }
+    # Perform request with retries + exponential backoff on 429; simple handling for other network errors
+    attempt = 0
+    payload = None
+    last_error = None
+    while attempt < OPENALEX_MAX_RETRIES:
+        try:
+            req = Request(query, headers=headers)
+            with urlopen(req, timeout=timeout) as resp:
+                payload = json.load(resp)
+            # successful request - polite pause before next call
+            time.sleep(OPENALEX_RATE_LIMIT_SECONDS + random.uniform(0, OPENALEX_JITTER_SECONDS))
+            break
+        except HTTPError as he:
+            last_error = he
+            # If rate limited, backoff and retry
+            if getattr(he, 'code', None) == 429:
+                retry_after = None
+                if hasattr(he, 'headers') and he.headers is not None:
+                    ra = he.headers.get('Retry-After')
+                    if ra:
+                        try:
+                            retry_after = float(ra)
+                        except ValueError:
+                            pass
+                wait = retry_after if retry_after is not None else (OPENALEX_RATE_LIMIT_SECONDS * (OPENALEX_BACKOFF_FACTOR ** attempt))
+                wait += random.uniform(0, OPENALEX_JITTER_SECONDS)
+                time.sleep(wait)
+                attempt += 1
+                continue
+            # for 404 or other HTTP errors, return structured error immediately
+            return {
+                'openalex_query': query,
+                'openalex_work_id': '',
+                'openalex_doi': '',
+                'openalex_is_oa': False,
+                'openalex_oa_status': 'unknown',
+                'openalex_oa_url': '',
+                'openalex_publication_year': None,
+                'openalex_cited_by_count': None,
+                'openalex_source_display_name': '',
+                'openalex_authors': '',
+                'openalex_suggested_fields': [],
+                'openalex_enrichment_error': f'HTTP Error {he.code}: {he.reason}',
+                'openalex_enrichment_raw_json': ''
+            }
+        except URLError as ue:
+            last_error = ue
+            # network issues - backoff and retry
+            wait = (OPENALEX_RATE_LIMIT_SECONDS * (OPENALEX_BACKOFF_FACTOR ** attempt)) + random.uniform(0, OPENALEX_JITTER_SECONDS)
+            time.sleep(wait)
+            attempt += 1
+            continue
+        except Exception as exc:
+            return {
+                'openalex_query': query,
+                'openalex_work_id': '',
+                'openalex_doi': '',
+                'openalex_is_oa': False,
+                'openalex_oa_status': 'unknown',
+                'openalex_oa_url': '',
+                'openalex_publication_year': None,
+                'openalex_cited_by_count': None,
+                'openalex_source_display_name': '',
+                'openalex_authors': '',
+                'openalex_suggested_fields': [],
+                'openalex_enrichment_error': str(exc),
+                'openalex_enrichment_raw_json': ''
+            }
+    if payload is None:
+        err_msg = str(last_error) if last_error is not None else 'no response'
+        return {
+            'openalex_query': query,
+            'openalex_work_id': '',
+            'openalex_doi': '',
+            'openalex_is_oa': False,
+            'openalex_oa_status': 'unknown',
+            'openalex_oa_url': '',
+            'openalex_publication_year': None,
+            'openalex_cited_by_count': None,
+            'openalex_source_display_name': '',
+            'openalex_authors': '',
+            'openalex_suggested_fields': [],
+            'openalex_enrichment_error': f'request failed after retries: {err_msg}',
+            'openalex_enrichment_raw_json': ''
+        }
+    if isinstance(payload, dict) and 'results' in payload and payload.get('results'):
+        payload = payload['results'][0]
+    if not isinstance(payload, dict):
+        return {
+            'openalex_query': query,
+            'openalex_work_id': '',
+            'openalex_doi': '',
+            'openalex_is_oa': False,
+            'openalex_oa_status': 'unknown',
+            'openalex_oa_url': '',
+            'openalex_publication_year': None,
+            'openalex_cited_by_count': None,
+            'openalex_source_display_name': '',
+            'openalex_authors': '',
+            'openalex_suggested_fields': [],
+            'openalex_enrichment_error': 'empty response',
+            'openalex_enrichment_raw_json': ''
+        }
+    return extract_openalex_enrichment(payload, doi=doi, title=title)
 
 def connect():
     if DB.exists(): DB.unlink()
@@ -266,10 +478,50 @@ def build():
         'citation_policy_raw','call_name','result_idperson','result_coordinator','publication_id','match_method'
     ]
     gt = gt[gt_cols].sort_values(['project_id','cod_prod']).reset_index(drop=True)
+    enrichment_columns = [
+        'openalex_work_id','openalex_doi','openalex_is_oa','openalex_oa_status',
+        'openalex_oa_url','openalex_publication_year','openalex_cited_by_count',
+        'openalex_source_display_name','openalex_authors',
+        'openalex_enrichment_error','openalex_enrichment_raw_json'
+    ]
+    gt = gt.assign(
+        openalex_work_id=pd.Series([None] * len(gt), dtype='object'),
+        openalex_doi=pd.Series([None] * len(gt), dtype='object'),
+        openalex_is_oa=pd.Series([None] * len(gt), dtype='object'),
+        openalex_oa_status=pd.Series([None] * len(gt), dtype='object'),
+        openalex_oa_url=pd.Series([None] * len(gt), dtype='object'),
+        openalex_publication_year=pd.Series([pd.NA] * len(gt), dtype='Int64'),
+        openalex_cited_by_count=pd.Series([pd.NA] * len(gt), dtype='Int64'),
+        openalex_source_display_name=pd.Series([None] * len(gt), dtype='object'),
+        openalex_authors=pd.Series([None] * len(gt), dtype='object'),
+        openalex_enrichment_error=pd.Series([None] * len(gt), dtype='object'),
+        openalex_enrichment_raw_json=pd.Series([None] * len(gt), dtype='object')
+    )
+
+    # Only query OpenAlex for results that match publication-like types to reduce requests and avoid rate limits
+    for idx, row in gt.iterrows():
+        try:
+            if row.get('result_type') in PUBLICATION_RESULT_TYPES:
+                title_hint = row.get('result_title') or row.get('result_other') or row.get('project_title') or ''
+                # skip titles that are clearly placeholders
+                title_hint = title_hint if str(title_hint).strip() not in {'', '-', 'NO APLICA', 'NO APLICA '} else ''
+                doi_hint = row.get('doi_norm') or row.get('doi_raw') or ''
+                # normalize DOI empty markers
+                doi_hint = doi_hint if norm_doi(doi_hint) else ''
+                enrichment = fetch_openalex_enrichment(doi=doi_hint, title=title_hint)
+                for col in enrichment_columns:
+                    gt.at[idx, col] = enrichment.get(col, None)
+            else:
+                # leave enrichment columns as default (None / NA)
+                continue
+        except Exception as exc:
+            gt.at[idx, 'openalex_enrichment_error'] = str(exc)
+
     gt.to_sql('project_results_ground_truth', con, index=False, if_exists='replace')
     gt.to_csv(OUT/'06_project_results_ground_truth.csv', index=False, encoding='utf-8-sig')
 
     gt_publications = gt[gt['result_type'].isin(PUBLICATION_RESULT_TYPES)].copy()
+    gt_publications['result_is_publication_like'] = True
     gt_publications.to_sql('project_publication_ground_truth', con, index=False, if_exists='replace')
     gt_publications.to_csv(OUT/'07_project_publication_ground_truth.csv', index=False, encoding='utf-8-sig')
 

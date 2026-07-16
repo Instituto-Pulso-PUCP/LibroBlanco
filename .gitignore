@@ -1,4 +1,8 @@
 *.csv
 *.db
 *.json
+.env
+.env.*
 LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/salidas/00_ground_truth_metrics_slide.md
+/LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/tests/__pycache__
+/LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/scripts/__pycache__
