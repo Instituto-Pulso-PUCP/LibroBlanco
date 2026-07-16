@@ -3,19 +3,13 @@ from pathlib import Path
 import os
 import sqlite3, re, unicodedata, json
 from difflib import SequenceMatcher
-from urllib.parse import quote
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
-import time, math, random
 import pandas as pd
 
-OPENALEX_API_KEY = os.getenv('OPENALEX_API_KEY', '').strip()
-OPENALEX_MAILTO = os.getenv('OPENALEX_MAILTO', '').strip()
-# Rate limiting and retry/backoff configuration for OpenAlex queries
-OPENALEX_RATE_LIMIT_SECONDS = float(os.getenv('OPENALEX_RATE_LIMIT_SECONDS', '3.0'))
-OPENALEX_MAX_RETRIES = int(os.getenv('OPENALEX_MAX_RETRIES', '4'))
-OPENALEX_BACKOFF_FACTOR = float(os.getenv('OPENALEX_BACKOFF_FACTOR', '2.0'))
-OPENALEX_JITTER_SECONDS = float(os.getenv('OPENALEX_JITTER_SECONDS', '0.5'))
+from openalex_helpers import (
+    build_openalex_query,
+    extract_openalex_enrichment,
+    fetch_openalex_enrichment,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
@@ -414,8 +408,11 @@ def build():
     for c in ['RI','SCOPUS','WOS']:
         if c not in pubs: pubs[c]=0
         pubs[c] = pubs[c].fillna(0).astype(int)
+    pubs['found_in_RI'] = pubs['RI'] > 0
+    pubs['found_in_SCOPUS'] = pubs['SCOPUS'] > 0
+    pubs['found_in_WOS'] = pubs['WOS'] > 0
     pubs['publication_id'] = range(1, len(pubs)+1)
-    pubs = pubs[['publication_id','master_key','doi','title','title_norm','year','journal','abstract','keywords','source_count','RI','SCOPUS','WOS']]
+    pubs = pubs[['publication_id','master_key','doi','title','title_norm','year','journal','abstract','keywords','source_count','RI','SCOPUS','WOS','found_in_RI','found_in_SCOPUS','found_in_WOS']]
     print('05 pubs master', len(pubs), flush=True)
     pubs.to_sql('publications', con, index=False)
     pubs.to_csv(OUT/'03_publications_master.csv', index=False, encoding='utf-8-sig')

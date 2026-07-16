@@ -4,11 +4,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(ROOT))
 
-import run_pipeline as rp
+import openalex_helpers as oh
 
 
 def test_build_openalex_query_uses_title_when_doi_missing():
-    query = rp.build_openalex_query(doi=None, title="A study about open science")
+    query = oh.build_openalex_query(doi=None, title="A study about open science")
     assert "search" in query
     assert "A%20study%20about%20open%20science" in query
 

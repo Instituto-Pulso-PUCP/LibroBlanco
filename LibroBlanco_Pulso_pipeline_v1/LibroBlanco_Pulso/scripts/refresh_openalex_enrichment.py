@@ -3,9 +3,9 @@ from pathlib import Path
 import json
 import pandas as pd
 
+from openalex_helpers import fetch_openalex_enrichment
 from run_pipeline import (
     PUBLICATION_RESULT_TYPES,
-    fetch_openalex_enrichment,
     norm_doi,
 )
 
