@@ -53,12 +53,12 @@ def load_projects(workbook_path: Path, text_columns=None):
 
 
 def embed_with_tfidf(texts, max_features=2000):
-    vectorizer = TfidfVectorizer(max_features=max_features, stop_words='spanish')
+    vectorizer = TfidfVectorizer(max_features=max_features, stop_words=None)
     X = vectorizer.fit_transform(texts)
     return X.toarray(), vectorizer
 
 
-def embed_with_sentence_transformers(texts, model_name='paraphrase-multilingual-MiniLM-L12-v2'):
+def embed_with_sentence_transformers(texts, model_name='jinaai/jina-embeddings-v5-text-nano', task='retrieval'):
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
@@ -67,16 +67,30 @@ def embed_with_sentence_transformers(texts, model_name='paraphrase-multilingual-
             "Install it with: pip install sentence-transformers"
         ) from exc
 
-    model = SentenceTransformer(model_name)
-    embeddings = model.encode(texts, show_progress_bar=True, convert_to_numpy=True)
+    model = SentenceTransformer(
+        model_name,
+        trust_remote_code=True,
+        device='cpu',
+        model_kwargs={"dtype": None},
+    )
+    embeddings = model.encode(
+        texts,
+        show_progress_bar=True,
+        convert_to_numpy=True,
+        task=task,
+    )
     return embeddings, model
 
 
-def compute_embeddings(texts, method='tfidf', model_name=None):
+def compute_embeddings(texts, method='tfidf', model_name=None, sentence_task='retrieval'):
     if method == 'sentence-transformers':
-        model_name = model_name or 'paraphrase-multilingual-MiniLM-L12-v2'
-        embeddings, model = embed_with_sentence_transformers(texts, model_name=model_name)
-        return embeddings, {'method': method, 'model_name': model_name}
+        model_name = model_name or 'jinaai/jina-embeddings-v5-text-nano'
+        embeddings, model = embed_with_sentence_transformers(
+            texts,
+            model_name=model_name,
+            task=sentence_task,
+        )
+        return embeddings, {'method': method, 'model_name': model_name, 'task': sentence_task}
     if method == 'tfidf':
         embeddings, vectorizer = embed_with_tfidf(texts)
         return embeddings, {'method': method, 'vectorizer': 'tfidf', 'max_features': 2000}
@@ -110,6 +124,7 @@ def run_analysis(
     output_csv: Path,
     embedding_method: str = 'tfidf',
     embedding_model: str = None,
+    sentence_task: str = 'retrieval',
     n_components: int = 3,
     n_clusters: int = 8,
 ):
@@ -118,7 +133,12 @@ def run_analysis(
         raise ValueError('No descriptive project text found. Please add summary/keywords/explanation fields to TEXT_COLUMNS.')
 
     print(f'Loaded {len(df)} projects. Computing embeddings with method={embedding_method}...')
-    embeddings, embed_metadata = compute_embeddings(df['project_text'].tolist(), method=embedding_method, model_name=embedding_model)
+    embeddings, embed_metadata = compute_embeddings(
+        df['project_text'].tolist(),
+        method=embedding_method,
+        model_name=embedding_model,
+        sentence_task=sentence_task,
+    )
     print('Embeddings shape:', embeddings.shape)
 
     print(f'Running PCA with n_components={n_components}...')
@@ -152,6 +172,7 @@ def parse_args():
     parser.add_argument('--output', default='salidas/project_semantic_analysis.csv', help='Output CSV path')
     parser.add_argument('--embedding-method', default='tfidf', choices=['tfidf', 'sentence-transformers'], help='Embedding method')
     parser.add_argument('--embedding-model', default=None, help='SentenceTransformer model name when using sentence-transformers')
+    parser.add_argument('--sentence-task', default='retrieval', help='Task for sentence-transformers models (e.g. retrieval, text-matching, classification, clustering)')
     parser.add_argument('--n-components', type=int, default=3, help='Number of PCA components')
     parser.add_argument('--n-clusters', type=int, default=8, help='Number of clusters for KMeans')
     return parser.parse_args()
@@ -168,6 +189,7 @@ if __name__ == '__main__':
         output_csv=output_csv,
         embedding_method=args.embedding_method,
         embedding_model=args.embedding_model,
+        sentence_task=args.sentence_task,
         n_components=args.n_components,
         n_clusters=args.n_clusters,
     )
