@@ -6,3 +6,9 @@
 LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/salidas/00_ground_truth_metrics_slide.md
 /LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/tests/__pycache__
 /LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/scripts/__pycache__
+*.pyc
+scripts/__pycache__/run_pipeline.cpython-312.pyc
+*.jsonl
+
+# Generated colored XLSX outputs (input data lives in datos/ and is not ignored)
+salidas/*.xlsx

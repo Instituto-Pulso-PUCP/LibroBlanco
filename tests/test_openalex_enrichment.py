@@ -9,7 +9,7 @@ import openalex_helpers as oh
 
 def test_build_openalex_query_uses_title_when_doi_missing():
     query = oh.build_openalex_query(doi=None, title="A study about open science")
-    assert "search" in query
+    assert "search.exact" in query
     assert "A%20study%20about%20open%20science" in query
 
 
@@ -29,7 +29,7 @@ def test_extract_openalex_enrichment_parses_oa_fields():
         "authorships": [{"author": {"display_name": "Jane Doe"}}],
     }
 
-    result = rp.extract_openalex_enrichment(payload, doi="10.1000/test", title="Test paper")
+    result = oh.extract_openalex_enrichment(payload, doi="10.1000/test", title="Test paper")
 
     assert result["openalex_work_id"] == "https://openalex.org/W123"
     assert result["openalex_is_oa"] is True
@@ -37,4 +37,6 @@ def test_extract_openalex_enrichment_parses_oa_fields():
     assert result["openalex_oa_url"] == "https://example.org/article"
     assert result["openalex_publication_year"] == 2022
     assert result["openalex_cited_by_count"] == 11
-    assert "openalex_oa_status" in result["openalex_suggested_fields"]
+    assert result["openalex_authors"] == "Jane Doe"
+    assert result["openalex_institution_names"] == ""
+    assert result["openalex_institution_country_codes"] == ""

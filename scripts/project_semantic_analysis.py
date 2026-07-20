@@ -58,7 +58,7 @@ def embed_with_tfidf(texts, max_features=2000):
     return X.toarray(), vectorizer
 
 
-def embed_with_sentence_transformers(texts, model_name='jinaai/jina-embeddings-v5-text-nano', task='retrieval'):
+def embed_with_sentence_transformers(texts, model_name='jinaai/jina-embeddings-v5-text-nano', task='clustering'):
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
@@ -172,7 +172,7 @@ def parse_args():
     parser.add_argument('--output', default='salidas/project_semantic_analysis.csv', help='Output CSV path')
     parser.add_argument('--embedding-method', default='tfidf', choices=['tfidf', 'sentence-transformers'], help='Embedding method')
     parser.add_argument('--embedding-model', default=None, help='SentenceTransformer model name when using sentence-transformers')
-    parser.add_argument('--sentence-task', default='retrieval', help='Task for sentence-transformers models (e.g. retrieval, text-matching, classification, clustering)')
+    parser.add_argument('--sentence-task', default='clustering', help='Task for sentence-transformers models (e.g. retrieval, text-matching, classification, clustering)')
     parser.add_argument('--n-components', type=int, default=3, help='Number of PCA components')
     parser.add_argument('--n-clusters', type=int, default=8, help='Number of clusters for KMeans')
     return parser.parse_args()

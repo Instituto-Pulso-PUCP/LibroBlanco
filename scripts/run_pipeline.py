@@ -1,20 +1,27 @@
 
 from pathlib import Path
 import os
+import sys
+import argparse
 import sqlite3, re, unicodedata, json
 from difflib import SequenceMatcher
+import numpy as np
 import pandas as pd
 
 from openalex_helpers import (
     build_openalex_query,
     extract_openalex_enrichment,
     fetch_openalex_enrichment,
+    fetch_openalex_enrichment_cached,
+    OpenAlexCache,
 )
+from pipeline_utils import ProgressBar
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
 OUT = ROOT / "salidas"
 DB = OUT / "libro_blanco.db"
+OPENALEX_CACHE = OUT / "openalex_cache.jsonl"
 
 PROJECT_SHEET = "PROYECTOS"
 RESULTS_SHEET = "PROY_RESULTADOS"
@@ -52,6 +59,19 @@ CONFIG = {
 }
 
 STOPWORDS = set('''de del la el los las y e en para por con sin un una unos unas the and of in on for to a an from via as at into sobre entre hacia desde mediante frente al ante que se su sus or o'''.split())
+
+def _json_default(o):
+    """Fallback JSON serializer for numpy/pandas scalar types."""
+    if isinstance(o, np.integer):
+        return int(o)
+    if isinstance(o, np.floating):
+        return float(o)
+    if isinstance(o, np.bool_):
+        return bool(o)
+    if o is pd.NA or (isinstance(o, float) and pd.isna(o)):
+        return None
+    return str(o)
+
 
 def norm_text(x):
     if x is None or (isinstance(x, float) and pd.isna(x)):
@@ -102,210 +122,12 @@ def title_score(proj_title, pub_title):
     jac = token_jaccard(proj_title, pub_title)
     return round(max(seq*0.5, jac), 4)
 
-def build_openalex_query(doi=None, title=None):
-    doi_norm = norm_doi(doi)
-    params = []
-    if OPENALEX_API_KEY:
-        params.append(("api_key", OPENALEX_API_KEY))
-    if OPENALEX_MAILTO:
-        params.append(("mailto", OPENALEX_MAILTO))
-
-    def build_query(base, query_params):
-        if not query_params:
-            return base
-        qs = '&'.join(f"{quote(str(k))}={quote(str(v))}" for k, v in query_params)
-        return f"{base}?{qs}"
-
-    if doi_norm:
-        return build_query(f"https://api.openalex.org/works/doi:{doi_norm}", params)
-    title_norm = str(title or "").strip()
-    if title_norm:
-        query_params = [("search", title_norm), ("per-page", 1)] + params
-        return build_query("https://api.openalex.org/works", query_params)
-    return ""
-
-
-def extract_openalex_enrichment(payload, doi=None, title=None):
-    payload = payload or {}
-    location = payload.get("primary_location") or {}
-    oa_location = payload.get("best_oa_location") or location
-    oa_meta = payload.get("open_access") or {}
-    is_oa = bool(oa_meta.get("is_oa") if isinstance(oa_meta, dict) else False) or bool(location.get("is_oa") or False)
-    oa_status = oa_meta.get("oa_status") or ("green" if is_oa else "closed")
-    oa_url = (oa_location or {}).get("landing_page_url") or (location or {}).get("landing_page_url") or ""
-    source_name = ((oa_location or {}).get("source") or {}).get("display_name") or ((location or {}).get("source") or {}).get("display_name") or ""
-    authors = []
-    for item in payload.get("authorships") or []:
-        author = item.get("author") or {}
-        name = author.get("display_name")
-        if name:
-            authors.append(name)
-    suggested_fields = []
-    if payload.get("doi"):
-        suggested_fields.append("openalex_doi")
-    if payload.get("publication_year") is not None:
-        suggested_fields.append("openalex_publication_year")
-    if payload.get("cited_by_count") is not None:
-        suggested_fields.append("openalex_cited_by_count")
-    if source_name:
-        suggested_fields.append("openalex_source_display_name")
-    if authors:
-        suggested_fields.append("openalex_authors")
-    if oa_status:
-        suggested_fields.append("openalex_oa_status")
-    if oa_url:
-        suggested_fields.append("openalex_oa_url")
-    return {
-        'openalex_query': build_openalex_query(doi=doi, title=title),
-        'openalex_work_id': payload.get('id', ''),
-        'openalex_doi': payload.get('doi', ''),
-        'openalex_is_oa': is_oa,
-        'openalex_oa_status': oa_status,
-        'openalex_oa_url': oa_url,
-        'openalex_publication_year': payload.get('publication_year'),
-        'openalex_cited_by_count': payload.get('cited_by_count'),
-        'openalex_source_display_name': source_name,
-        'openalex_authors': '; '.join(authors),
-        'openalex_suggested_fields': suggested_fields,
-        'openalex_enrichment_error': '',
-        'openalex_enrichment_raw_json': json.dumps(payload, ensure_ascii=False)
-    }
-
-
-def fetch_openalex_enrichment(doi=None, title=None, timeout=10):
-    query = build_openalex_query(doi=doi, title=title)
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    if OPENALEX_API_KEY:
-        # OpenAlex expects api_key in query params (we already add it there), but include Authorization for proxies that accept it
-        headers['Authorization'] = f"Bearer {OPENALEX_API_KEY}"
-    if OPENALEX_MAILTO:
-        headers['mailto'] = OPENALEX_MAILTO
-    if not query:
-        return {
-            'openalex_query': '',
-            'openalex_work_id': '',
-            'openalex_doi': '',
-            'openalex_is_oa': False,
-            'openalex_oa_status': 'unknown',
-            'openalex_oa_url': '',
-            'openalex_publication_year': None,
-            'openalex_cited_by_count': None,
-            'openalex_source_display_name': '',
-            'openalex_authors': '',
-            'openalex_suggested_fields': [],
-            'openalex_enrichment_error': 'missing doi or title',
-            'openalex_enrichment_raw_json': ''
-        }
-    # Perform request with retries + exponential backoff on 429; simple handling for other network errors
-    attempt = 0
-    payload = None
-    last_error = None
-    while attempt < OPENALEX_MAX_RETRIES:
-        try:
-            req = Request(query, headers=headers)
-            with urlopen(req, timeout=timeout) as resp:
-                payload = json.load(resp)
-            # successful request - polite pause before next call
-            time.sleep(OPENALEX_RATE_LIMIT_SECONDS + random.uniform(0, OPENALEX_JITTER_SECONDS))
-            break
-        except HTTPError as he:
-            last_error = he
-            # If rate limited, backoff and retry
-            if getattr(he, 'code', None) == 429:
-                retry_after = None
-                if hasattr(he, 'headers') and he.headers is not None:
-                    ra = he.headers.get('Retry-After')
-                    if ra:
-                        try:
-                            retry_after = float(ra)
-                        except ValueError:
-                            pass
-                wait = retry_after if retry_after is not None else (OPENALEX_RATE_LIMIT_SECONDS * (OPENALEX_BACKOFF_FACTOR ** attempt))
-                wait += random.uniform(0, OPENALEX_JITTER_SECONDS)
-                time.sleep(wait)
-                attempt += 1
-                continue
-            # for 404 or other HTTP errors, return structured error immediately
-            return {
-                'openalex_query': query,
-                'openalex_work_id': '',
-                'openalex_doi': '',
-                'openalex_is_oa': False,
-                'openalex_oa_status': 'unknown',
-                'openalex_oa_url': '',
-                'openalex_publication_year': None,
-                'openalex_cited_by_count': None,
-                'openalex_source_display_name': '',
-                'openalex_authors': '',
-                'openalex_suggested_fields': [],
-                'openalex_enrichment_error': f'HTTP Error {he.code}: {he.reason}',
-                'openalex_enrichment_raw_json': ''
-            }
-        except URLError as ue:
-            last_error = ue
-            # network issues - backoff and retry
-            wait = (OPENALEX_RATE_LIMIT_SECONDS * (OPENALEX_BACKOFF_FACTOR ** attempt)) + random.uniform(0, OPENALEX_JITTER_SECONDS)
-            time.sleep(wait)
-            attempt += 1
-            continue
-        except Exception as exc:
-            return {
-                'openalex_query': query,
-                'openalex_work_id': '',
-                'openalex_doi': '',
-                'openalex_is_oa': False,
-                'openalex_oa_status': 'unknown',
-                'openalex_oa_url': '',
-                'openalex_publication_year': None,
-                'openalex_cited_by_count': None,
-                'openalex_source_display_name': '',
-                'openalex_authors': '',
-                'openalex_suggested_fields': [],
-                'openalex_enrichment_error': str(exc),
-                'openalex_enrichment_raw_json': ''
-            }
-    if payload is None:
-        err_msg = str(last_error) if last_error is not None else 'no response'
-        return {
-            'openalex_query': query,
-            'openalex_work_id': '',
-            'openalex_doi': '',
-            'openalex_is_oa': False,
-            'openalex_oa_status': 'unknown',
-            'openalex_oa_url': '',
-            'openalex_publication_year': None,
-            'openalex_cited_by_count': None,
-            'openalex_source_display_name': '',
-            'openalex_authors': '',
-            'openalex_suggested_fields': [],
-            'openalex_enrichment_error': f'request failed after retries: {err_msg}',
-            'openalex_enrichment_raw_json': ''
-        }
-    if isinstance(payload, dict) and 'results' in payload and payload.get('results'):
-        payload = payload['results'][0]
-    if not isinstance(payload, dict):
-        return {
-            'openalex_query': query,
-            'openalex_work_id': '',
-            'openalex_doi': '',
-            'openalex_is_oa': False,
-            'openalex_oa_status': 'unknown',
-            'openalex_oa_url': '',
-            'openalex_publication_year': None,
-            'openalex_cited_by_count': None,
-            'openalex_source_display_name': '',
-            'openalex_authors': '',
-            'openalex_suggested_fields': [],
-            'openalex_enrichment_error': 'empty response',
-            'openalex_enrichment_raw_json': ''
-        }
-    return extract_openalex_enrichment(payload, doi=doi, title=title)
 
 def connect():
     if DB.exists(): DB.unlink()
     return sqlite3.connect(DB)
 
-def build():
+def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True):
     OUT.mkdir(exist_ok=True)
     con = connect()
     print('01 projects...', flush=True)
@@ -479,7 +301,8 @@ def build():
         'openalex_work_id','openalex_doi','openalex_is_oa','openalex_oa_status',
         'openalex_oa_url','openalex_publication_year','openalex_cited_by_count',
         'openalex_source_display_name','openalex_authors',
-        'openalex_enrichment_error','openalex_enrichment_raw_json'
+        'openalex_institution_names','openalex_institution_country_codes',
+        'openalex_enrichment_error'
     ]
     gt = gt.assign(
         openalex_work_id=pd.Series([None] * len(gt), dtype='object'),
@@ -491,36 +314,96 @@ def build():
         openalex_cited_by_count=pd.Series([pd.NA] * len(gt), dtype='Int64'),
         openalex_source_display_name=pd.Series([None] * len(gt), dtype='object'),
         openalex_authors=pd.Series([None] * len(gt), dtype='object'),
-        openalex_enrichment_error=pd.Series([None] * len(gt), dtype='object'),
-        openalex_enrichment_raw_json=pd.Series([None] * len(gt), dtype='object')
+        openalex_institution_names=pd.Series([None] * len(gt), dtype='object'),
+        openalex_institution_country_codes=pd.Series([None] * len(gt), dtype='object'),
+        openalex_enrichment_error=pd.Series([None] * len(gt), dtype='object')
     )
 
+    openalex_raw_payloads = []
+    interrupted = False
     # Only query OpenAlex for results that match publication-like types to reduce requests and avoid rate limits
-    for idx, row in gt.iterrows():
+    pub_indices = [idx for idx, row in gt.iterrows() if row.get('result_type') in PUBLICATION_RESULT_TYPES]
+    if limit is not None:
+        pub_indices = pub_indices[:limit]
+
+    if not enrich_openalex:
+        print(f'OpenAlex enrichment skipped (--no-openalex); {len(pub_indices)} publication-like rows left unenriched.', flush=True)
+    else:
+        cache = OpenAlexCache(OPENALEX_CACHE) if use_cache else None
+        cached_at_start = len(cache) if cache is not None else 0
+        print(
+            f'OpenAlex enrichment: {len(pub_indices)} publication-like rows to process'
+            + (f' ({cached_at_start} already cached in {OPENALEX_CACHE.name})' if cache is not None else '')
+            + '. Press Ctrl-C to stop; progress is saved and resumes automatically on the next run.',
+            flush=True,
+        )
+        bar = ProgressBar(len(pub_indices), desc='OpenAlex enrichment')
         try:
-            if row.get('result_type') in PUBLICATION_RESULT_TYPES:
-                title_hint = row.get('result_title') or row.get('result_other') or row.get('project_title') or ''
-                # skip titles that are clearly placeholders
-                title_hint = title_hint if str(title_hint).strip() not in {'', '-', 'NO APLICA', 'NO APLICA '} else ''
-                doi_hint = row.get('doi_norm') or row.get('doi_raw') or ''
-                # normalize DOI empty markers
-                doi_hint = doi_hint if norm_doi(doi_hint) else ''
-                enrichment = fetch_openalex_enrichment(doi=doi_hint, title=title_hint)
-                for col in enrichment_columns:
-                    gt.at[idx, col] = enrichment.get(col, None)
-            else:
-                # leave enrichment columns as default (None / NA)
-                continue
-        except Exception as exc:
-            gt.at[idx, 'openalex_enrichment_error'] = str(exc)
+            for idx in pub_indices:
+                row = gt.loc[idx]
+                was_cached = False
+                try:
+                    title_hint = row.get('result_title') or row.get('result_other') or row.get('project_title') or ''
+                    # skip titles that are clearly placeholders
+                    title_hint = title_hint if str(title_hint).strip() not in {'', '-', 'NO APLICA', 'NO APLICA '} else ''
+                    doi_hint = row.get('doi_norm') or row.get('doi_raw') or ''
+                    # normalize DOI empty markers
+                    doi_hint = doi_hint if norm_doi(doi_hint) else ''
+                    enrichment, was_cached = fetch_openalex_enrichment_cached(
+                        doi=doi_hint, title=title_hint, cache=cache
+                    )
+                    for col in enrichment_columns:
+                        gt.at[idx, col] = enrichment.get(col, None)
+                    raw_payload = enrichment.get('openalex_raw_payload')
+                    if raw_payload is not None:
+                        openalex_raw_payloads.append({
+                            'project_id': row.get('project_id'),
+                            'cod_prod': row.get('cod_prod'),
+                            'openalex_work_id': enrichment.get('openalex_work_id'),
+                            'openalex_raw_payload': raw_payload
+                        })
+                    had_error = bool(enrichment.get('openalex_enrichment_error'))
+                except Exception as exc:
+                    gt.at[idx, 'openalex_enrichment_error'] = str(exc)
+                    had_error = True
+                bar.update(cached=was_cached, error=had_error)
+        except KeyboardInterrupt:
+            interrupted = True
+            bar.close()
+            print(
+                '\nInterrupted by user. Fetched results are cached in '
+                f'{OPENALEX_CACHE.name}; re-run the pipeline to resume where you stopped.',
+                flush=True,
+            )
+        else:
+            bar.close()
 
     gt.to_sql('project_results_ground_truth', con, index=False, if_exists='replace')
     gt.to_csv(OUT/'06_project_results_ground_truth.csv', index=False, encoding='utf-8-sig')
+
+    raw_payload_path = OUT/'06_project_results_ground_truth_openalex_raw_payload.jsonl'
+    with open(raw_payload_path, 'w', encoding='utf-8') as f:
+        for record in openalex_raw_payloads:
+            f.write(json.dumps(record, ensure_ascii=False, default=_json_default) + '\n')
+    print(f'Wrote OpenAlex raw payloads to {raw_payload_path}', flush=True)
 
     gt_publications = gt[gt['result_type'].isin(PUBLICATION_RESULT_TYPES)].copy()
     gt_publications['result_is_publication_like'] = True
     gt_publications.to_sql('project_publication_ground_truth', con, index=False, if_exists='replace')
     gt_publications.to_csv(OUT/'07_project_publication_ground_truth.csv', index=False, encoding='utf-8-sig')
+
+    if make_xlsx:
+        try:
+            from export_xlsx import write_colored_xlsx
+            write_colored_xlsx(
+                gt, OUT/'06_project_results_ground_truth.xlsx',
+                title='Resultados de proyectos (ground truth)')
+            write_colored_xlsx(
+                gt_publications, OUT/'07_project_publication_ground_truth.xlsx',
+                title='Publicaciones declaradas (ground truth)')
+            print('Wrote color-coded XLSX for 06 and 07', flush=True)
+        except Exception as exc:
+            print(f'WARNING: could not write XLSX outputs: {exc}', flush=True)
 
     print('08 base built; matching candidates will be generated by 02_match_candidates.py', flush=True)
     # Basic empty candidates placeholder; run 02_match_candidates.py for the full matching stage.
@@ -550,5 +433,31 @@ def build():
     con.close()
     return summary
 
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description=(
+            'Construye la base normalizada del Libro Blanco y enriquece los '
+            'resultados con OpenAlex. El enriquecimiento es reanudable: puede '
+            'detenerse con Ctrl-C y continuar en una ejecucion posterior.'
+        )
+    )
+    parser.add_argument('--no-openalex', action='store_true',
+                        help='Omite el enriquecimiento con OpenAlex (construccion rapida).')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='Enriquece solo las primeras N filas tipo publicacion (util para pruebas).')
+    parser.add_argument('--no-cache', action='store_true',
+                        help='No usa el cache persistente de OpenAlex (reconsulta todo).')
+    parser.add_argument('--skip-xlsx', action='store_true',
+                        help='No genera los archivos XLSX con encabezados coloreados por fuente.')
+    return parser.parse_args(argv)
+
+
 if __name__ == '__main__':
-    print(json.dumps(build(), ensure_ascii=False, indent=2))
+    args = parse_args()
+    summary = build(
+        enrich_openalex=not args.no_openalex,
+        limit=args.limit,
+        make_xlsx=not args.skip_xlsx,
+        use_cache=not args.no_cache,
+    )
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
