@@ -30,7 +30,7 @@ def main(argv=None):
     parser.add_argument('--no-cache', action='store_true')
     parser.add_argument('--skip-xlsx', action='store_true')
     parser.add_argument('--with-resumenes', action='store_true',
-                        help='Integra los resumenes de "Obtencion de resumenes" al final.')
+                        help='Integra los resumenes de "Obtencion de resumenes" en 06 y 07.')
     args = parser.parse_args(argv)
 
     pipeline_cmd = [sys.executable, str(SCRIPTS / 'run_pipeline.py')]
@@ -40,15 +40,14 @@ def main(argv=None):
         pipeline_cmd.append('--no-cache')
     if args.skip_xlsx:
         pipeline_cmd.append('--skip-xlsx')
+    if args.with_resumenes:
+        pipeline_cmd.append('--with-resumenes')
     if args.limit is not None:
         pipeline_cmd += ['--limit', str(args.limit)]
 
     subprocess.check_call(pipeline_cmd)
     subprocess.check_call([sys.executable, str(SCRIPTS / '02_match_candidates.py')])
     subprocess.check_call([sys.executable, str(SCRIPTS / '03_ground_truth_metrics.py')])
-
-    if args.with_resumenes:
-        subprocess.check_call([sys.executable, str(SCRIPTS / 'merge_resumenes.py')])
 
 
 if __name__ == '__main__':

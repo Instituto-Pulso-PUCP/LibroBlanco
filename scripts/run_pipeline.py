@@ -127,7 +127,8 @@ def connect():
     if DB.exists(): DB.unlink()
     return sqlite3.connect(DB)
 
-def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True):
+def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
+          merge_resumenes=False, resumenes_path=None):
     OUT.mkdir(exist_ok=True)
     con = connect()
     print('01 projects...', flush=True)
@@ -378,6 +379,23 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True):
         else:
             bar.close()
 
+    if merge_resumenes:
+        try:
+            import merge_resumenes as mr
+            res_path = resumenes_path or mr.find_default_resumenes_csv()
+            if res_path and Path(res_path).exists():
+                resumenes_df = mr.load_resumenes(Path(res_path))
+                gt, matched, added = mr.apply_resumenes(gt, resumenes_df)
+                print(
+                    f'Resumenes integrados en 06/07: {matched} filas con datos '
+                    f'({len(added)} columnas) desde {Path(res_path).name}',
+                    flush=True,
+                )
+            else:
+                print('WARNING: --with-resumenes activado pero no se encontro un CSV de resumenes; se omite.', flush=True)
+        except Exception as exc:
+            print(f'WARNING: no se pudieron integrar los resumenes: {exc}', flush=True)
+
     gt.to_sql('project_results_ground_truth', con, index=False, if_exists='replace')
     gt.to_csv(OUT/'06_project_results_ground_truth.csv', index=False, encoding='utf-8-sig')
 
@@ -449,6 +467,11 @@ def parse_args(argv=None):
                         help='No usa el cache persistente de OpenAlex (reconsulta todo).')
     parser.add_argument('--skip-xlsx', action='store_true',
                         help='No genera los archivos XLSX con encabezados coloreados por fuente.')
+    parser.add_argument('--with-resumenes', action='store_true',
+                        help='Integra los resumenes/palabras clave de "Obtencion de resumenes" '
+                             'directamente en las salidas 06 y 07 (cruce por DOI).')
+    parser.add_argument('--resumenes', type=Path, default=None,
+                        help='Ruta al CSV de resumenes (por defecto, se busca en la carpeta "Obtencion de resumenes").')
     return parser.parse_args(argv)
 
 
@@ -459,5 +482,7 @@ if __name__ == '__main__':
         limit=args.limit,
         make_xlsx=not args.skip_xlsx,
         use_cache=not args.no_cache,
+        merge_resumenes=args.with_resumenes,
+        resumenes_path=args.resumenes,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))

@@ -117,14 +117,17 @@ def load_resumenes(path: Path) -> pd.DataFrame:
     return df
 
 
-def merge_into(main_csv: Path, resumenes_df: pd.DataFrame, output_csv: Path,
-               make_xlsx: bool = True, xlsx_title: str | None = None) -> dict:
-    main = pd.read_csv(main_csv, dtype=str, keep_default_na=False)
+def apply_resumenes(main: pd.DataFrame, resumenes_df: pd.DataFrame) -> tuple[pd.DataFrame, int, list]:
+    """Merge namespaced resumenes columns into ``main`` by normalized DOI.
 
+    Returns ``(merged_df, matched_count, added_columns)``. Only adds columns;
+    a re-run refreshes them cleanly. Non-matching rows get empty strings.
+    """
+    main = main.copy()
     doi_source = 'doi_norm' if 'doi_norm' in main.columns else (
         'doi_raw' if 'doi_raw' in main.columns else None)
     if doi_source is None:
-        raise ValueError(f'{main_csv} no tiene columna doi_norm ni doi_raw para cruzar.')
+        raise ValueError('El DataFrame no tiene columna doi_norm ni doi_raw para cruzar.')
     main['_doi_key'] = main[doi_source].map(norm_doi)
 
     # Build the right-hand frame with namespaced columns.
@@ -145,7 +148,16 @@ def merge_into(main_csv: Path, resumenes_df: pd.DataFrame, output_csv: Path,
     else:
         matched = 0
     merged = merged.drop(columns=['_doi_key'])
-    merged = merged.fillna('')
+    # Fill only the newly added columns to avoid touching existing NaN semantics.
+    for col in added_cols:
+        merged[col] = merged[col].fillna('')
+    return merged, matched, added_cols
+
+
+def merge_into(main_csv: Path, resumenes_df: pd.DataFrame, output_csv: Path,
+               make_xlsx: bool = True, xlsx_title: str | None = None) -> dict:
+    main = pd.read_csv(main_csv, dtype=str, keep_default_na=False)
+    merged, matched, added_cols = apply_resumenes(main, resumenes_df)
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_csv, index=False, encoding='utf-8-sig')
