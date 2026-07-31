@@ -37,13 +37,16 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
+
 from export_xlsx import write_colored_xlsx
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'salidas'
 RESUMENES_DIR = ROOT / 'Obtención de resúmenes'
 
@@ -68,7 +71,7 @@ def norm_doi(value) -> str:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ''
     text = str(value).strip()
-    if text.lower() in {'', '-', 'nan', 'none'}:
+    if text.lower() in {'', '-', 'nan', 'none', 'sin doi'}:
         return ''
     text = _DOI_PREFIX_RE.sub('', text)
     return text.strip().rstrip(' .;,').lower()

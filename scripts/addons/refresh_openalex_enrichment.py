@@ -1,13 +1,19 @@
 import argparse
+import importlib
+import sys
 from pathlib import Path
 import json
 import pandas as pd
 
+SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS_DIR / 'lib'))
+sys.path.insert(0, str(SCRIPTS_DIR / 'pipeline'))
+
 from openalex_helpers import fetch_openalex_enrichment
-from run_pipeline import (
-    PUBLICATION_RESULT_TYPES,
-    norm_doi,
-)
+
+_build_pipeline = importlib.import_module('01_build_pipeline')
+PUBLICATION_RESULT_TYPES = _build_pipeline.PUBLICATION_RESULT_TYPES
+norm_doi = _build_pipeline.norm_doi
 
 RETRY_ERROR_KEYWORDS = ["429", "Too Many Requests"]
 

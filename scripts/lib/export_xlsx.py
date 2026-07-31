@@ -51,7 +51,7 @@ _VRI_COLS = {
     'citation_raw', 'citation_fw_raw', 'citation_fa_raw', 'citation_policy_raw',
     'call_name', 'result_idperson', 'result_coordinator', 'result_is_publication_like',
 }
-_MATCHING_COLS = {'publication_id', 'match_method'}
+_MATCHING_COLS = {'publication_id', 'match_method', 'source_abstract', 'source_keywords'}
 
 
 def classify_column(column: str) -> str:

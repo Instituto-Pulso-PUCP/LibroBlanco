@@ -1,7 +1,7 @@
 from pathlib import Path
 import sqlite3, pandas as pd, re, unicodedata, json
 from difflib import SequenceMatcher
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'salidas'; DB=OUT/'libro_blanco.db'
 STOP=set('de del la el los las y e en para por con sin un una unos unas the and of in on for to a an from via as at into sobre entre hacia desde mediante frente al ante que se su sus or o'.upper().split())
 def norm_text(x):

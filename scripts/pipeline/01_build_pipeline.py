@@ -8,16 +8,21 @@ from difflib import SequenceMatcher
 import numpy as np
 import pandas as pd
 
+SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS_DIR / 'lib'))
+sys.path.insert(0, str(SCRIPTS_DIR / 'addons'))
+
 from openalex_helpers import (
     build_openalex_query,
     extract_openalex_enrichment,
     fetch_openalex_enrichment,
     fetch_openalex_enrichment_cached,
+    reconstruct_openalex_abstract,
     OpenAlexCache,
 )
 from pipeline_utils import ProgressBar
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 INPUT = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
 OUT = ROOT / "salidas"
 DB = OUT / "libro_blanco.db"
@@ -84,7 +89,7 @@ def norm_text(x):
 
 def norm_doi(x):
     s = str(x).strip().lower() if x is not None and not pd.isna(x) else ""
-    if s in {"", "-", "nan", "none"}: return ""
+    if s in {"", "-", "nan", "none", "sin doi"}: return ""
     s = re.sub(r"^https?://(dx\.)?doi\.org/", "", s)
     return s.strip().rstrip('.')
 
@@ -257,8 +262,9 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
         on='cod_aeri',
         how='inner'
     )
-    doi_lookup = pubs[['publication_id','doi']].assign(doi_norm=pubs['doi'].map(norm_doi))
-    doi_lookup = doi_lookup[doi_lookup['doi_norm'] != ''][['publication_id','doi_norm']].drop_duplicates(['doi_norm'])
+    doi_lookup = pubs[['publication_id','doi','abstract','keywords']].assign(doi_norm=pubs['doi'].map(norm_doi))
+    doi_lookup = doi_lookup[doi_lookup['doi_norm'] != ''][['publication_id','doi_norm','abstract','keywords']].drop_duplicates(['doi_norm'])
+    doi_lookup = doi_lookup.rename(columns={'abstract': 'source_abstract', 'keywords': 'source_keywords'})
     gt = gt.merge(
         doi_lookup,
         on='doi_norm',
@@ -295,7 +301,8 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
         'cod_prod','result_type','result_category','result_title','result_other','result_year',
         'equivalencia','doi_raw','doi_norm','issn_raw','isbn_raw','result_status','result_evidence',
         'scopus_eid','journal_raw','quartile_raw','citation_raw','citation_fw_raw','citation_fa_raw',
-        'citation_policy_raw','call_name','result_idperson','result_coordinator','publication_id','match_method'
+        'citation_policy_raw','call_name','result_idperson','result_coordinator','publication_id','match_method',
+        'source_abstract','source_keywords'
     ]
     gt = gt[gt_cols].sort_values(['project_id','cod_prod']).reset_index(drop=True)
     enrichment_columns = [
@@ -303,7 +310,7 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
         'openalex_oa_url','openalex_publication_year','openalex_cited_by_count',
         'openalex_source_display_name','openalex_authors',
         'openalex_institution_names','openalex_institution_country_codes',
-        'openalex_enrichment_error'
+        'openalex_abstract','openalex_enrichment_error'
     ]
     gt = gt.assign(
         openalex_work_id=pd.Series([None] * len(gt), dtype='object'),
@@ -317,6 +324,7 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
         openalex_authors=pd.Series([None] * len(gt), dtype='object'),
         openalex_institution_names=pd.Series([None] * len(gt), dtype='object'),
         openalex_institution_country_codes=pd.Series([None] * len(gt), dtype='object'),
+        openalex_abstract=pd.Series([None] * len(gt), dtype='object'),
         openalex_enrichment_error=pd.Series([None] * len(gt), dtype='object')
     )
 
@@ -356,6 +364,12 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
                     for col in enrichment_columns:
                         gt.at[idx, col] = enrichment.get(col, None)
                     raw_payload = enrichment.get('openalex_raw_payload')
+                    if not gt.at[idx, 'openalex_abstract'] and raw_payload:
+                        # Cache entries written before openalex_abstract existed lack the
+                        # key even though their stored raw_payload has the data.
+                        gt.at[idx, 'openalex_abstract'] = reconstruct_openalex_abstract(
+                            raw_payload.get('abstract_inverted_index')
+                        )
                     if raw_payload is not None:
                         openalex_raw_payloads.append({
                             'project_id': row.get('project_id'),

@@ -15,7 +15,7 @@ def _load_dotenv():
     overriding variables that are already set in the environment. Runs on
     import so any entry point picks up OPENALEX_* credentials automatically.
     """
-    env_path = Path(__file__).resolve().parents[1] / '.env'
+    env_path = Path(__file__).resolve().parents[2] / '.env'
     if not env_path.exists():
         return
     try:
@@ -69,6 +69,18 @@ def build_openalex_query(doi=None, title=None):
     return ""
 
 
+def reconstruct_openalex_abstract(inverted_index):
+    """Rebuild plain-text abstract from OpenAlex's ``abstract_inverted_index``."""
+    if not isinstance(inverted_index, dict):
+        return ''
+    pairs = []
+    for word, positions in inverted_index.items():
+        if isinstance(positions, list):
+            pairs.extend((position, word) for position in positions if isinstance(position, int))
+    pairs.sort(key=lambda pair: pair[0])
+    return ' '.join(word for _, word in pairs)
+
+
 def extract_openalex_enrichment(payload, doi=None, title=None):
     payload = payload or {}
     location = payload.get("primary_location") or {}
@@ -115,6 +127,7 @@ def extract_openalex_enrichment(payload, doi=None, title=None):
         'openalex_authors': '; '.join(authors),
         'openalex_institution_names': '; '.join(unique_institution_names),
         'openalex_institution_country_codes': '; '.join(unique_country_codes),
+        'openalex_abstract': reconstruct_openalex_abstract(payload.get('abstract_inverted_index')),
         'openalex_enrichment_error': '',
     }
 

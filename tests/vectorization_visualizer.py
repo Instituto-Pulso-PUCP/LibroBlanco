@@ -15,7 +15,7 @@ DEFAULT_OUTPUT = Path("salidas/project_semantic_analysis.csv")
 def load_analysis_csv(path: Path = DEFAULT_OUTPUT) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
-            f"Expected analysis CSV at {path}. Run scripts/project_semantic_analysis.py first."
+            f"Expected analysis CSV at {path}. Run scripts/analysis/project_semantic_analysis.py first."
         )
     df = pd.read_csv(path, dtype=str)
     numeric_cols = [col for col in df.columns if col.startswith("pca_") or col == "cluster_label"]

@@ -7,8 +7,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1] / "scripts"
-sys.path.insert(0, str(ROOT))
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+sys.path.insert(0, str(SCRIPTS / "lib"))
+sys.path.insert(0, str(SCRIPTS / "addons"))
 
 import openalex_helpers as oh
 from export_xlsx import classify_column, write_colored_xlsx

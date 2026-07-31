@@ -14,8 +14,9 @@ python scripts/run_all.py
 O por etapas:
 
 ```bash
-python scripts/run_pipeline.py
-python scripts/02_match_candidates.py
+python scripts/pipeline/01_build_pipeline.py
+python scripts/pipeline/02_match_candidates.py
+python scripts/pipeline/03_ground_truth_metrics.py
 ```
 
 ## Enriquecimiento OpenAlex: detener y reanudar
@@ -31,13 +32,20 @@ porcentaje, ETA y aciertos de cache:
   consultan las pendientes (los errores transitorios como HTTP 429 se reintentan
   automaticamente; no se cachean).
 
-Opciones de `run_pipeline.py` (tambien disponibles en `run_all.py`):
+Opciones de `pipeline/01_build_pipeline.py` (tambien disponibles en `run_all.py`):
 
 ```bash
-python scripts/run_pipeline.py --no-openalex   # construccion rapida, sin OpenAlex
-python scripts/run_pipeline.py --limit 50      # enriquece solo las primeras 50 filas (pruebas)
-python scripts/run_pipeline.py --no-cache      # ignora el cache y reconsulta todo
-python scripts/run_pipeline.py --skip-xlsx     # no genera los XLSX coloreados
+python scripts/pipeline/01_build_pipeline.py --no-openalex   # construccion rapida, sin OpenAlex
+python scripts/pipeline/01_build_pipeline.py --limit 50      # enriquece solo las primeras 50 filas (pruebas)
+python scripts/pipeline/01_build_pipeline.py --no-cache      # ignora el cache y reconsulta todo
+python scripts/pipeline/01_build_pipeline.py --skip-xlsx     # no genera los XLSX coloreados
+```
+
+Si el enriquecimiento se detuvo con errores transitorios (HTTP 429), se puede
+reintentar sobre un CSV ya generado sin re-ejecutar todo el pipeline:
+
+```bash
+python scripts/addons/refresh_openalex_enrichment.py salidas/06_project_results_ground_truth.csv
 ```
 
 ## Salida XLSX con encabezados coloreados por fuente
@@ -53,7 +61,7 @@ resumenes). Incluye una hoja **Leyenda**, fila de encabezado congelada y filtros
 Para exportar cualquier CSV manualmente:
 
 ```bash
-python scripts/export_xlsx.py salidas/06_project_results_ground_truth.csv salida.xlsx
+python scripts/lib/export_xlsx.py salidas/06_project_results_ground_truth.csv salida.xlsx
 ```
 
 ## Integrar resumenes y palabras clave ("Obtencion de resumenes")
@@ -64,13 +72,34 @@ integrar exportaciones de Scopus Web. Para **fusionar** esos resultados ya
 calculados (`doi-resultados.csv`) con las salidas del pipeline, cruzando por DOI:
 
 ```bash
-python scripts/merge_resumenes.py                 # integra en 06 y 07 (busca el CSV automaticamente)
-python scripts/merge_resumenes.py --resumenes ruta/doi-resultados.csv
-python scripts/run_all.py --with-resumenes        # como parte del flujo completo
+python scripts/addons/merge_resumenes.py                 # integra en 06 y 07 (busca el CSV automaticamente)
+python scripts/addons/merge_resumenes.py --resumenes ruta/doi-resultados.csv
+python scripts/run_all.py --with-resumenes                # como parte del flujo completo
 ```
 
 Genera `*_con_resumenes.csv` y su XLSX coloreado. Solo agrega columnas de
 resumen/palabras clave (con su procedencia); no modifica los datos existentes.
+
+### Tres fuentes de resumen/palabras clave en `06`/`07`
+
+`01_build_pipeline.py` puebla `06`/`07` con resumen y palabras clave desde
+tres fuentes independientes, sin sobrescribirse entre sí:
+
+- `resumen` / `palabras_clave` (+ `*_fuente`): resultado de la consulta por
+  DOI a Scopus/PubMed/OpenAlex/Crossref ("Obtención de resúmenes"), integrado
+  con `--with-resumenes`.
+- `source_abstract` / `source_keywords`: **ya vienen en el Excel original**
+  (columnas `Abstract`/`Author Keywords` de `Pubs_SCOPUS`, `abstract`/`keywords`
+  de `Pubs_WoS`), agregadas en `03_publications_master.csv` y unidas a `06`/`07`
+  por `publication_id`. No requieren ninguna llamada a API.
+- `openalex_abstract`: reconstruido a partir de `abstract_inverted_index` en
+  la respuesta de OpenAlex que el enriquecimiento estándar ya guarda en
+  `06_..._openalex_raw_payload.jsonl`. Tampoco requiere una consulta adicional.
+
+Como `source_abstract` y `openalex_abstract` provienen de datos que el
+pipeline ya descarga/lee de todas formas, conviene revisarlas antes de volver
+a ejecutar "Obtención de resúmenes": suelen cubrir la mayoría de los huecos
+sin gastar cuota de la API de Elsevier.
 
 ## Salidas principales
 
@@ -86,11 +115,24 @@ resumen/palabras clave (con su procedencia); no modifica los datos existentes.
 
 ## Scripts
 
-- `scripts/run_all.py`: ejecuta `run_pipeline.py` y luego `02_match_candidates.py`.
-- `scripts/run_pipeline.py`: construye la base normalizada, consolida publicaciones y genera los archivos `01` a `04`, además de `06`, `07` y un `00_summary.json` inicial.
-- `scripts/02_match_candidates.py`: genera `05_project_publication_candidates_v1.csv` y actualiza `00_summary.json` con métricas de matching contra el ground truth.
-- `scripts/compare_v1_v2.py`: compara la cobertura de v1 contra un enlace directo `COD_AERI + DOI` usando `PROY_RESULTADOS`; es un análisis auxiliar y no modifica las salidas principales.
-- `scripts/efficacy_analysis.py`: resume cobertura, distribución de puntajes y patrones de evidencia a partir de las salidas ya generadas; usa rutas relativas al repositorio.
+`scripts/` está organizado por rol:
+
+- `scripts/run_all.py`: orquestador de entrada; ejecuta las tres etapas de `pipeline/` en orden.
+- `scripts/pipeline/` — **etapa principal, secuencial**:
+  - `01_build_pipeline.py`: construye la base normalizada, consolida publicaciones y genera los archivos `01` a `04`, además de `06`, `07` y un `00_summary.json` inicial.
+  - `02_match_candidates.py`: genera `05_project_publication_candidates_v1.csv` y actualiza `00_summary.json` con métricas de matching contra el ground truth.
+  - `03_ground_truth_metrics.py`: calcula métricas de precisión/recall contra el ground truth y escribe `00_ground_truth_metrics.json` / `.md`.
+- `scripts/addons/` — pasos opcionales, ejecutables por separado o vía flags de `run_all.py`:
+  - `refresh_openalex_enrichment.py`: reintenta el enriquecimiento OpenAlex sobre un CSV ya generado, para filas que fallaron con HTTP 429.
+  - `merge_resumenes.py`: integra resúmenes/palabras clave desde "Obtención de resúmenes" en `06`/`07` (cruce por DOI).
+- `scripts/lib/` — utilidades compartidas, no se ejecutan directamente:
+  - `openalex_helpers.py`: cliente OpenAlex (query building, fetch, cache persistente).
+  - `pipeline_utils.py`: barra de progreso reanudable sin dependencias externas.
+  - `export_xlsx.py`: exporta un CSV/DataFrame a XLSX con encabezados coloreados por fuente.
+- `scripts/analysis/` — análisis puntuales, no forman parte del flujo automatizado y no modifican las salidas:
+  - `compare_v1_v2.py`: compara la cobertura de v1 contra un enlace directo `COD_AERI + DOI` usando `PROY_RESULTADOS`.
+  - `efficacy_analysis.py`: resume cobertura, distribución de puntajes y patrones de evidencia a partir de las salidas ya generadas.
+  - `project_semantic_analysis.py`: vectoriza los proyectos (TF-IDF o sentence-transformers) y aplica PCA + KMeans para explorar clusters temáticos.
 
 ## Nota metodológica
 

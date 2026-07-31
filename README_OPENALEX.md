@@ -10,5 +10,5 @@ Example:
 ```powershell
 Copy-Item .env.example .env
 # edit .env
-python LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/scripts/run_pipeline.py
+python LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/scripts/pipeline/01_build_pipeline.py
 ```

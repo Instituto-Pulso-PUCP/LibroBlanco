@@ -5,13 +5,13 @@ Reads the current DB + Excel and prints a summary without modifying any outputs.
 from pathlib import Path
 import sqlite3, re, unicodedata, pandas as pd, json
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 INPUT = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
 DB    = ROOT / "salidas" / "libro_blanco.db"
 
 def norm_doi(x):
     s = str(x).strip().lower() if x and not (isinstance(x, float) and pd.isna(x)) else ""
-    if s in {"", "-", "nan", "none"}: return ""
+    if s in {"", "-", "nan", "none", "sin doi"}: return ""
     s = re.sub(r"^https?://(dx\.)?doi\.org/", "", s)
     return s.strip().rstrip('.')
 
@@ -43,7 +43,7 @@ closed_keys = proj_keys[
     (proj_keys["year"] >= 2010) & (proj_keys["status"] == "5. Cerrado")
 ]
 
-# Rebuild COD_AERI → project_id by replicating run_pipeline.py's filter + row order
+# Rebuild COD_AERI → project_id by replicating pipeline/01_build_pipeline.py's filter + row order
 proj_full = pd.read_excel(INPUT, sheet_name="PROYECTOS")
 proj_full["year"] = pd.to_numeric(proj_full["Año"], errors="coerce").astype("Int64")
 proj_full["status"] = proj_full["Estado"].astype(str).str.strip()

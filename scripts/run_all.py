@@ -24,7 +24,7 @@ SCRIPTS = ROOT / 'scripts'
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Ejecuta run_pipeline + matching + metricas.')
+    parser = argparse.ArgumentParser(description='Ejecuta pipeline/01_build_pipeline + matching + metricas.')
     parser.add_argument('--no-openalex', action='store_true')
     parser.add_argument('--limit', type=int, default=None)
     parser.add_argument('--no-cache', action='store_true')
@@ -33,7 +33,7 @@ def main(argv=None):
                         help='Integra los resumenes de "Obtencion de resumenes" en 06 y 07.')
     args = parser.parse_args(argv)
 
-    pipeline_cmd = [sys.executable, str(SCRIPTS / 'run_pipeline.py')]
+    pipeline_cmd = [sys.executable, str(SCRIPTS / 'pipeline' / '01_build_pipeline.py')]
     if args.no_openalex:
         pipeline_cmd.append('--no-openalex')
     if args.no_cache:
@@ -46,8 +46,8 @@ def main(argv=None):
         pipeline_cmd += ['--limit', str(args.limit)]
 
     subprocess.check_call(pipeline_cmd)
-    subprocess.check_call([sys.executable, str(SCRIPTS / '02_match_candidates.py')])
-    subprocess.check_call([sys.executable, str(SCRIPTS / '03_ground_truth_metrics.py')])
+    subprocess.check_call([sys.executable, str(SCRIPTS / 'pipeline' / '02_match_candidates.py')])
+    subprocess.check_call([sys.executable, str(SCRIPTS / 'pipeline' / '03_ground_truth_metrics.py')])
 
 
 if __name__ == '__main__':
