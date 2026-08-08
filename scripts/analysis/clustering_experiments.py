@@ -40,12 +40,16 @@ DATASETS = {
     'projects': {
         'source': OUT / '01_projects_closed.csv',
         'id_col': 'project_id',
-        'text_columns': ['title', 'project_type', 'knowledge_area', 'research_line', 'funding_type', 'funder'],
+        'text_columns': [
+            'title', 'project_type', 'knowledge_area',
+            'research_line_1', 'research_line_2', 'research_line_3', 'research_line_4',
+            'research_line', 'executing_unit', 'executing_section',
+        ],
     },
     'publications': {
         'source': OUT / '03_publications_master.csv',
         'id_col': 'publication_id',
-        'text_columns': ['title', 'abstract', 'keywords'],
+        'text_columns': ['title', 'abstract', 'keywords', 'journal'],
     },
 }
 
@@ -100,7 +104,11 @@ def run_experiment(dataset_name, model_keys, method_names, limit=None, output_di
 
     results = []
     for model_key in model_keys:
-        embeddings, emb_meta = get_or_compute_embeddings(df['cluster_text'].tolist(), model_key, cache_dir)
+        try:
+            embeddings, emb_meta = get_or_compute_embeddings(df['cluster_text'].tolist(), model_key, cache_dir)
+        except Exception as exc:
+            print(f'  [{model_key}] SKIPPED - failed to compute embeddings: {exc}', flush=True)
+            continue
         pca_coords = PCA(n_components=3, random_state=42).fit_transform(embeddings)
 
         for method in method_names:

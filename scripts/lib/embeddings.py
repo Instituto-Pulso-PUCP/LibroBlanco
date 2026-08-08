@@ -23,22 +23,35 @@ EMBEDDING_MODELS = {
         'model_kwargs': {'trust_remote_code': True, 'model_kwargs': {'dtype': None}},
         'encode_kwargs': {'task': 'clustering'},
     },
-    'mpnet-multilingual': {
-        'method': 'sentence-transformers',
-        'model_name': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
-        'label': 'paraphrase-multilingual-mpnet-base-v2',
-    },
-    'e5-base-multilingual': {
-        'method': 'sentence-transformers',
-        'model_name': 'intfloat/multilingual-e5-base',
-        'label': 'multilingual-e5-base',
-        # e5 models expect a "query: "/"passage: " instruction prefix for best quality.
-        'text_prefix': 'passage: ',
-    },
     'bge-m3': {
         'method': 'sentence-transformers',
         'model_name': 'BAAI/bge-m3',
         'label': 'bge-m3',
+    },
+    'snowflake-arctic-l-v2': {
+        'method': 'sentence-transformers',
+        'model_name': 'Snowflake/snowflake-arctic-embed-l-v2.0',
+        'label': 'snowflake-arctic-embed-l-v2.0',
+    },
+    'minilm-multilingual': {
+        'method': 'sentence-transformers',
+        'model_name': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+        'label': 'paraphrase-multilingual-MiniLM-L12-v2',
+    },
+    'e5-small-multilingual': {
+        'method': 'sentence-transformers',
+        'model_name': 'intfloat/multilingual-e5-small',
+        'label': 'multilingual-e5-small',
+        # e5's FAQ: use "query: " (not "passage: ") when embeddings are used
+        # as features for clustering/classification rather than retrieval.
+        'text_prefix': 'query: ',
+    },
+    'nomic-v2-moe': {
+        'method': 'sentence-transformers',
+        'model_name': 'nomic-ai/nomic-embed-text-v2-moe',
+        'label': 'nomic-embed-text-v2-moe',
+        'model_kwargs': {'trust_remote_code': True},
+        'encode_kwargs': {'prompt_name': 'passage'},
     },
 }
 

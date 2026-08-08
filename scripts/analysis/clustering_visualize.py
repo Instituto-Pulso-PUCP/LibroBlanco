@@ -11,7 +11,7 @@ files under salidas/clustering/<dataset>/, and writes:
 Usage::
 
     python clustering_visualize.py --dataset projects
-    python clustering_visualize.py --dataset publications --scatter-for jina-v5-nano__hdbscan,mpnet-multilingual__hdbscan
+    python clustering_visualize.py --dataset publications --scatter-for jina-v5-nano__hdbscan,gte-multilingual-base__hdbscan
 """
 
 from __future__ import annotations
@@ -184,6 +184,39 @@ def plot_combo_grid(dataset_name, comparison, cache_dir, output_path):
     return output_path
 
 
+RESEARCH_LINE_COLUMNS = ['research_line', 'research_line_1', 'research_line_2', 'research_line_3', 'research_line_4']
+HAS_LINE_COLOR = '#2a78d6'
+NO_LINE_COLOR = '#eb6834'
+
+
+def plot_research_line_coverage(labels_df, title, output_path):
+    """Colors the same PCA projection by whether the project had any research-line
+    text filled in, to check whether that sparse field (not the topical content) is
+    what's driving cluster separation."""
+    fig, ax = plt.subplots(figsize=(8, 6.5))
+    fig.patch.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+
+    for has_line, color, label in ((False, NO_LINE_COLOR, 'sin línea de investigación'),
+                                    (True, HAS_LINE_COLOR, 'con línea de investigación')):
+        sub = labels_df[labels_df['has_research_line'] == has_line]
+        ax.scatter(sub['pca_1'], sub['pca_2'], s=14, color=color, alpha=0.7,
+                   linewidths=0, label=f'{label} (n={len(sub)})', zorder=3)
+
+    ax.set_title(title, color=INK_PRIMARY, fontsize=11, fontweight='bold', loc='left', wrap=True)
+    ax.set_xlabel('PCA 1', color=INK_SECONDARY, fontsize=9)
+    ax.set_ylabel('PCA 2', color=INK_SECONDARY, fontsize=9)
+    ax.grid(True, color=GRIDLINE, linewidth=0.8, zorder=0)
+    ax.set_axisbelow(True)
+    _style_axes(ax)
+    ax.legend(fontsize=8, frameon=False, labelcolor=INK_SECONDARY, loc='best')
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    return output_path
+
+
 def run(dataset_name, scatter_for=None):
     cache_dir = OUT / dataset_name
     comparison = pd.read_csv(cache_dir / 'comparison_metrics.csv')
@@ -214,6 +247,27 @@ def run(dataset_name, scatter_for=None):
         title = f'{row["embedding_label"]} + {method} · silhouette {row["silhouette"]}'
         scatter_path = plot_pca_scatter(labels_df, id_col, title, plots_dir / f'pca_scatter_{combo}.png')
         print(f'Wrote {scatter_path}')
+
+        if dataset_name == 'projects':
+            projects_path = ROOT / 'salidas' / '01_projects_closed.csv'
+            projects_df = pd.read_csv(projects_path, dtype=str)
+            has_line = pd.Series(False, index=projects_df.index)
+            for col in RESEARCH_LINE_COLUMNS:
+                if col in projects_df.columns:
+                    has_line |= projects_df[col].fillna('').str.strip().ne('')
+            projects_df = projects_df[['project_id', ]].copy()
+            projects_df['project_id'] = projects_df['project_id'].astype(str)
+            projects_df['has_research_line'] = has_line.values
+
+            merged = labels_df.copy()
+            merged['project_id'] = merged['project_id'].astype(str)
+            merged = merged.merge(projects_df, on='project_id', how='left')
+
+            rl_title = f'{row["embedding_label"]} + {method} · con vs. sin línea de investigación'
+            rl_path = plot_research_line_coverage(
+                merged, rl_title, plots_dir / f'research_line_coverage_{combo}.png'
+            )
+            print(f'Wrote {rl_path}')
 
 
 def parse_args():
