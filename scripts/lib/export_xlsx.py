@@ -36,6 +36,7 @@ SOURCE_DEFS = {
     'matching':  {'fill': '7F7F7F', 'font': 'FFFFFF', 'label': 'Enlace calculado por el pipeline'},
     'openalex':  {'fill': '548235', 'font': 'FFFFFF', 'label': 'Enriquecimiento OpenAlex'},
     'resumenes': {'fill': '7030A0', 'font': 'FFFFFF', 'label': 'Resumenes/palabras clave (Scopus/PubMed/OpenAlex/Crossref)'},
+    'cris':      {'fill': 'B7950B', 'font': 'FFFFFF', 'label': 'Enriquecimiento CRIS (ProyectosPUCPCRIS)'},
     'otro':      {'fill': '404040', 'font': 'FFFFFF', 'label': 'Otra fuente'},
 }
 
@@ -61,6 +62,8 @@ def classify_column(column: str) -> str:
         return 'openalex'
     if col.startswith('resumen') or col.startswith('palabras_clave') or col.startswith('fuente_'):
         return 'resumenes'
+    if col.startswith('cris_') or col == 'internalid':
+        return 'cris'
     if col in _PROYECTO_COLS:
         return 'proyecto'
     if col in _VRI_COLS:
