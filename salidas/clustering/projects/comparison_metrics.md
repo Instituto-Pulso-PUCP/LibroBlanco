@@ -1,32 +1,32 @@
-# Clustering comparison — projects (938 rows)
+# Clustering comparison — projects (975 rows)
 
 | Embedding | Method | n_clusters | silhouette | davies_bouldin | calinski_harabasz | noise % | seconds |
 |---|---|---|---|---|---|---|---|
-| jina-embeddings-v5-text-nano | hdbscan | 9 | 0.259 | 1.3308 | 51.15 | 57.89 | 0.2 |
-| jina-embeddings-v5-text-nano | kmeans | 12 | 0.1495 | 2.0591 | 67.84 | 0.0 | 0.3 |
-| jina-embeddings-v5-text-nano | gaussian_mixture | 12 | 0.1482 | 2.0674 | 67.58 | 0.0 | 0.6 |
-| jina-embeddings-v5-text-nano | agglomerative | 12 | 0.1399 | 2.0899 | 63.81 | 0.0 | 0.2 |
-| paraphrase-multilingual-MiniLM-L12-v2 | hdbscan | 7 | 0.1184 | 1.5339 | 24.39 | 68.02 | 0.1 |
-| bge-m3 | hdbscan | 5 | 0.1039 | 2.486 | 12.49 | 80.49 | 0.1 |
-| paraphrase-multilingual-MiniLM-L12-v2 | kmeans | 12 | 0.0982 | 2.7095 | 47.41 | 0.0 | 0.2 |
-| paraphrase-multilingual-MiniLM-L12-v2 | gaussian_mixture | 12 | 0.0963 | 2.7217 | 47.2 | 0.0 | 0.4 |
-| paraphrase-multilingual-MiniLM-L12-v2 | agglomerative | 12 | 0.0938 | 2.5384 | 44.65 | 0.0 | 0.1 |
-| snowflake-arctic-embed-l-v2.0 | hdbscan | 6 | 0.0694 | 2.5971 | 11.69 | 68.87 | 0.1 |
-| nomic-embed-text-v2-moe | hdbscan | 2 | 0.056 | 2.4496 | 14.61 | 44.99 | 0.1 |
-| multilingual-e5-small | hdbscan | 2 | 0.054 | 2.4455 | 7.9 | 63.43 | 0.1 |
-| TF-IDF (baseline) | hdbscan | 8 | 0.053 | 3.1361 | 7.8 | 49.57 | 0.2 |
-| nomic-embed-text-v2-moe | kmeans | 12 | 0.0459 | 3.6867 | 21.04 | 0.0 | 0.2 |
-| nomic-embed-text-v2-moe | gaussian_mixture | 12 | 0.0459 | 3.6862 | 21.05 | 0.0 | 0.6 |
-| TF-IDF (baseline) | kmeans | 12 | 0.0433 | 4.3339 | 10.46 | 0.0 | 3.8 |
-| TF-IDF (baseline) | gaussian_mixture | 12 | 0.0408 | 4.45 | 10.13 | 0.0 | 0.8 |
-| TF-IDF (baseline) | agglomerative | 12 | 0.0398 | 4.2657 | 10.3 | 0.0 | 0.4 |
-| nomic-embed-text-v2-moe | agglomerative | 12 | 0.0389 | 3.8286 | 19.84 | 0.0 | 0.2 |
-| bge-m3 | agglomerative | 12 | 0.0382 | 3.6984 | 17.3 | 0.0 | 0.2 |
-| snowflake-arctic-embed-l-v2.0 | kmeans | 12 | 0.0381 | 4.2474 | 15.28 | 0.0 | 0.3 |
-| snowflake-arctic-embed-l-v2.0 | gaussian_mixture | 12 | 0.0381 | 4.2442 | 15.28 | 0.0 | 0.7 |
-| bge-m3 | gaussian_mixture | 12 | 0.0369 | 4.1392 | 17.2 | 0.0 | 0.9 |
-| bge-m3 | kmeans | 12 | 0.0369 | 4.1392 | 17.2 | 0.0 | 0.3 |
-| snowflake-arctic-embed-l-v2.0 | agglomerative | 12 | 0.0347 | 4.0762 | 14.65 | 0.0 | 0.2 |
-| multilingual-e5-small | kmeans | 8 | 0.0324 | 4.3777 | 19.96 | 0.0 | 0.2 |
-| multilingual-e5-small | gaussian_mixture | 8 | 0.0323 | 4.3806 | 19.97 | 0.0 | 0.6 |
-| multilingual-e5-small | agglomerative | 12 | 0.0308 | 4.5525 | 14.5 | 0.0 | 0.1 |
+| jina-embeddings-v5-text-nano | hdbscan | 9 | 0.27 | 1.2587 | 53.86 | 60.1 | 0.1 |
+| jina-embeddings-v5-text-nano | agglomerative | 12 | 0.1389 | 2.1234 | 63.93 | 0.0 | 0.2 |
+| jina-embeddings-v5-text-nano | kmeans | 12 | 0.1382 | 2.1538 | 65.44 | 0.0 | 0.2 |
+| jina-embeddings-v5-text-nano | gaussian_mixture | 12 | 0.1349 | 2.1779 | 65.14 | 0.0 | 0.4 |
+| paraphrase-multilingual-MiniLM-L12-v2 | hdbscan | 7 | 0.1202 | 1.5256 | 24.2 | 69.95 | 0.0 |
+| paraphrase-multilingual-MiniLM-L12-v2 | kmeans | 10 | 0.1023 | 2.5993 | 52.76 | 0.0 | 0.1 |
+| paraphrase-multilingual-MiniLM-L12-v2 | gaussian_mixture | 10 | 0.0989 | 2.6208 | 52.44 | 0.0 | 0.4 |
+| bge-m3 | hdbscan | 5 | 0.0925 | 2.56 | 12.64 | 78.36 | 0.1 |
+| multilingual-e5-small | hdbscan | 4 | 0.0906 | 2.6879 | 10.42 | 84.51 | 0.0 |
+| paraphrase-multilingual-MiniLM-L12-v2 | agglomerative | 12 | 0.0864 | 2.6025 | 43.65 | 0.0 | 0.1 |
+| snowflake-arctic-embed-l-v2.0 | hdbscan | 6 | 0.0741 | 2.619 | 12.4 | 69.54 | 0.0 |
+| nomic-embed-text-v2-moe | hdbscan | 2 | 0.052 | 2.473 | 14.81 | 43.79 | 0.0 |
+| nomic-embed-text-v2-moe | kmeans | 8 | 0.0477 | 3.8012 | 28.04 | 0.0 | 0.2 |
+| nomic-embed-text-v2-moe | gaussian_mixture | 8 | 0.0471 | 3.798 | 28.04 | 0.0 | 0.6 |
+| nomic-embed-text-v2-moe | agglomerative | 12 | 0.0411 | 3.9954 | 20.09 | 0.0 | 0.1 |
+| TF-IDF (baseline) | kmeans | 12 | 0.0397 | 4.6895 | 10.44 | 0.0 | 3.4 |
+| snowflake-arctic-embed-l-v2.0 | kmeans | 8 | 0.0393 | 4.2614 | 20.61 | 0.0 | 0.2 |
+| snowflake-arctic-embed-l-v2.0 | gaussian_mixture | 8 | 0.0392 | 4.2631 | 20.61 | 0.0 | 0.6 |
+| TF-IDF (baseline) | gaussian_mixture | 12 | 0.0378 | 4.795 | 10.23 | 0.0 | 0.5 |
+| TF-IDF (baseline) | agglomerative | 12 | 0.0375 | 4.3438 | 10.27 | 0.0 | 0.3 |
+| bge-m3 | kmeans | 12 | 0.0363 | 3.8058 | 18.57 | 0.0 | 0.2 |
+| bge-m3 | gaussian_mixture | 12 | 0.0357 | 3.8021 | 18.56 | 0.0 | 0.6 |
+| bge-m3 | agglomerative | 12 | 0.0332 | 3.7666 | 17.14 | 0.0 | 0.2 |
+| multilingual-e5-small | kmeans | 8 | 0.0311 | 4.6504 | 20.28 | 0.0 | 0.1 |
+| multilingual-e5-small | gaussian_mixture | 8 | 0.0303 | 4.6625 | 20.24 | 0.0 | 0.4 |
+| snowflake-arctic-embed-l-v2.0 | agglomerative | 12 | 0.0302 | 4.1746 | 14.39 | 0.0 | 0.2 |
+| multilingual-e5-small | agglomerative | 12 | 0.0292 | 4.4033 | 14.19 | 0.0 | 0.1 |
+| TF-IDF (baseline) | hdbscan | 4 | 0.0195 | 2.9981 | 7.04 | 31.59 | 0.1 |

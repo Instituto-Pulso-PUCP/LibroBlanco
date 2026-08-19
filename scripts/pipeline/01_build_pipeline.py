@@ -206,7 +206,10 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
 
     sc = pd.read_excel(INPUT, sheet_name=SCOPUS_SHEET)
     for i,r in sc.iterrows():
-        key = add_pub('SCOPUS', i, r.get('DOI'), r.get('Title'), r.get('Year'), r.get('Scopus Source title'), r.get('Abstract'), r.get('Topic name'), r.to_dict())
+        # Pubs_SCOPUS's "Abstract" column is a link to the scopus.com record page in every
+        # row, not real abstract text — pass '' so first_nonempty() falls through to a real
+        # WOS/RI abstract for the same master_key when one exists, instead of masking it.
+        key = add_pub('SCOPUS', i, r.get('DOI'), r.get('Title'), r.get('Year'), r.get('Scopus Source title'), '', r.get('Topic name'), r.to_dict())
         authors = split_authors_scopus(r.get('Authors'))
         ids = split_ids(r.get('Scopus Author Ids'))
         for pos,a in enumerate(authors, start=1):
@@ -229,8 +232,19 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
             if v is not None and not pd.isna(v) and str(v).strip() not in {'','-','nan'}: return v
         return ''
     pubs = src.groupby('master_key', as_index=False).agg({
-        'doi': first_nonempty, 'title': first_nonempty, 'title_norm': first_nonempty, 'year': 'min', 'journal': first_nonempty, 'abstract': first_nonempty, 'keywords': first_nonempty, 'source':'nunique'
+        'doi': first_nonempty, 'title': first_nonempty, 'title_norm': first_nonempty, 'year': 'min', 'journal': first_nonempty, 'abstract': first_nonempty, 'source':'nunique'
     }).rename(columns={'source':'source_count'})
+    # Pubs_SCOPUS's "Topic name" is a single AI-generated theme phrase, not a real author
+    # keyword list — prefer a real WOS/RI keyword list for the same master_key when one
+    # exists, and only fall back to the Scopus topic phrase otherwise.
+    def best_keywords(group):
+        non_scopus = group.loc[group['source'] != 'SCOPUS', 'keywords']
+        chosen = first_nonempty(non_scopus)
+        if not chosen:
+            chosen = first_nonempty(group['keywords'])
+        return chosen
+    keywords_by_key = src.groupby('master_key').apply(best_keywords, include_groups=False)
+    pubs = pubs.merge(keywords_by_key.rename('keywords'), on='master_key', how='left')
     flags = src.pivot_table(index='master_key', columns='source', values='source_record_id', aggfunc='count', fill_value=0).reset_index()
     pubs = pubs.merge(flags, on='master_key', how='left')
     for c in ['RI','SCOPUS','WOS']:

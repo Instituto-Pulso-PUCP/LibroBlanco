@@ -51,6 +51,14 @@ DATASETS = {
         'id_col': 'publication_id',
         'text_columns': ['title', 'abstract', 'keywords', 'journal'],
     },
+    'publications_linked': {
+        # All 1,192 declared results from tracked projects (07_project_publication_ground_truth.csv):
+        # vetted master-catalog text where a DOI match exists (376 rows), ground-truth file's own
+        # columns otherwise. Built by scripts/addons/build_linked_publications_subset.py.
+        'source': OUT / '07_publications_linked_full.csv',
+        'id_col': 'publication_id',
+        'text_columns': ['title', 'abstract', 'keywords', 'journal'],
+    },
 }
 
 
