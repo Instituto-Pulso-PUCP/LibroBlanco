@@ -73,7 +73,9 @@ def embed_with_sentence_transformers(texts, model_name, model_kwargs=None,
         ) from exc
 
     model_kwargs = dict(model_kwargs or {})
-    model_kwargs.setdefault('device', 'cpu')
+    if 'device' not in model_kwargs:
+        import torch
+        model_kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = SentenceTransformer(model_name, **model_kwargs)
 
     prefixed = [f'{text_prefix}{t}' for t in texts] if text_prefix else list(texts)

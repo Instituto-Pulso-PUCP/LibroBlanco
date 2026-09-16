@@ -92,11 +92,18 @@ research_line, executing_unit, executing_section
 Chosen by explicit request; excludes `funding_type`/`funder` (previously
 included, dropped). CRIS columns (`cris_abstract`, `cris_keywords`,
 `cris_ocde_subject`, `cris_fos`, `cris_type_ocde`, `cris_coinvestigators`)
-are **not yet** included — fill rates are mostly too low to matter
-(`cris_abstract` 0.9%, `cris_keywords` 0.1%, `cris_fos`/`cris_ocde_subject`
-4.5%) except `cris_type_ocde` (43.9%, a project-type-like classification) and
-`cris_coinvestigators` (48.8%, not topical content) — open question, not
-yet decided.
+are **not yet** included in the clustering embeddings — open question, not
+yet decided. **Correction (2026-08-31):** the fill rates previously noted
+here (`cris_abstract` 0.9%, `cris_keywords` 0.1%, `cris_fos`/`cris_ocde_subject`
+4.5%) reflected a run against an older/thinner CRIS export and were wrong for
+the current data — measured against the current
+`datos/ProyectosPUCPCRIS-20260814.csv` + `salidas/01_projects_closed_con_cris.csv`
+(984 rows): `cris_abstract` 66.6%, `cris_keywords` 93.1%, `cris_fos` 93.2%,
+`cris_ocde_subject` 93.2%, `cris_type_ocde` 44.2%, `cris_coinvestigators`
+62.4%. `cris_abstract`/`cris_keywords` in particular are strong candidates
+for the topic-normalization pipeline in
+[docs/topic_normalization_pipeline.md](docs/topic_normalization_pipeline.md),
+which does use them.
 
 Missing-column handling: empty fields are dropped, not padded with
 placeholder text (`clean_text`/`build_text` in `clustering_experiments.py`).

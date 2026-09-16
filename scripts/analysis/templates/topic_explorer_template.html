@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__PAGE_TITLE__</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,600;9..144,680&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    :root {
+      --bg: #eef1ef;
+      --panel: #ffffff;
+      --panel-soft: #f5f7f6;
+      --ink: #182220;
+      --ink-soft: #38443f;
+      --muted: #61706b;
+      --line: #d7ddda;
+      --accent: #33586a;
+      --accent-strong: #203c4a;
+      --accent-soft: #e4ecef;
+      --evidence: #8a6a26;
+      --evidence-soft: #f4ead0;
+      --evidence-ink: #4d3b14;
+      --shadow: 0 18px 46px rgba(20, 30, 27, .10);
+      --radius: 9px;
+      --serif: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+      --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      --meta-soft: #e8edf3;
+      --meta-ink: #35485a;
+      --chip-soft: #e7ece8;
+      --chip-ink: #3c453f;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #12181a;
+        --panel: #1a2224;
+        --panel-soft: #1f2a2c;
+        --ink: #e7ece9;
+        --ink-soft: #c3cdc8;
+        --muted: #90a09a;
+        --line: #2c3739;
+        --accent: #8fb7c9;
+        --accent-strong: #b7d6e2;
+        --accent-soft: #223338;
+        --evidence: #d9ad5e;
+        --evidence-soft: #33291a;
+        --evidence-ink: #f0d9a8;
+        --shadow: 0 18px 46px rgba(0, 0, 0, .38);
+        --meta-soft: #212e34;
+        --meta-ink: #a9c2d3;
+        --chip-soft: #202a27;
+        --chip-ink: #b8c4bd;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #12181a;
+      --panel: #1a2224;
+      --panel-soft: #1f2a2c;
+      --ink: #e7ece9;
+      --ink-soft: #c3cdc8;
+      --muted: #90a09a;
+      --line: #2c3739;
+      --accent: #8fb7c9;
+      --accent-strong: #b7d6e2;
+      --accent-soft: #223338;
+      --evidence: #d9ad5e;
+      --evidence-soft: #33291a;
+      --evidence-ink: #f0d9a8;
+      --shadow: 0 18px 46px rgba(0, 0, 0, .38);
+      --meta-soft: #212e34;
+      --meta-ink: #a9c2d3;
+      --chip-soft: #202a27;
+      --chip-ink: #b8c4bd;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    header {
+      padding: 24px 28px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 27px;
+      line-height: 1.15;
+      font-weight: 620;
+      font-optical-sizing: auto;
+      text-wrap: balance;
+    }
+
+    .subtitle {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13.5px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(92px, 1fr));
+      gap: 8px;
+      min-width: 330px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      border-radius: var(--radius);
+      padding: 9px 12px;
+    }
+
+    .stat strong {
+      display: block;
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 21px;
+      font-weight: 500;
+      line-height: 1;
+      color: var(--accent-strong);
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .toolbar {
+      max-width: 1600px;
+      margin: 14px auto 0;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input[type="search"], select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      font-size: 14px;
+    }
+
+    button {
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+    main {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 18px 28px 28px;
+      display: grid;
+      grid-template-columns: minmax(360px, 1.1fr) minmax(420px, 1.3fr) minmax(360px, .9fr);
+      gap: 16px;
+      min-height: calc(100vh - 142px);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      min-height: 420px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 14px 16px;
+      font-family: var(--serif);
+      font-weight: 600;
+      font-size: 16.5px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+      color: var(--ink-soft);
+    }
+
+    .panel-body {
+      padding: 12px;
+      overflow: auto;
+      max-height: calc(100vh - 245px);
+    }
+
+    .proj {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .proj-header {
+      width: 100%;
+      min-height: 52px;
+      height: auto;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel);
+      text-align: left;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+      -webkit-appearance: none;
+      appearance: none;
+      font: inherit;
+      color: inherit;
+    }
+
+    .proj-header:hover,
+    .proj.open .proj-header {
+      background: var(--accent-soft);
+      color: var(--ink);
+    }
+
+    .proj-title {
+      display: block;
+      font-weight: 600;
+      line-height: 1.3;
+      font-size: 14px;
+    }
+
+    .proj-meta {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11.5px;
+      letter-spacing: .01em;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      white-space: nowrap;
+    }
+
+    .topic-list {
+      display: none;
+      padding: 0 10px 10px 24px;
+    }
+
+    .proj.open .topic-list { display: block; }
+
+    .topic-row {
+      position: relative;
+      border-left: 2px solid var(--line);
+      padding: 8px 8px 8px 14px;
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .topic-row::before {
+      content: "";
+      position: absolute;
+      left: -5px;
+      top: 15px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--evidence);
+    }
+
+    .topic-row:hover,
+    .topic-row.active {
+      background: var(--evidence-soft);
+      border-left-color: var(--evidence);
+    }
+
+    .flow {
+      min-height: 100%;
+      padding: 12px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 24px;
+      text-align: center;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+    }
+
+    .flow-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .flow-card + .arrow {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 22px;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .flow-card h3 {
+      margin: 6px 0 8px;
+      font-family: var(--serif);
+      font-weight: 560;
+      font-size: 19px;
+      line-height: 1.3;
+      text-wrap: balance;
+    }
+
+    .flow-card p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .evidence {
+      margin-top: 10px;
+      padding: 10px 11px;
+      border-left: 3px solid var(--evidence);
+      background: var(--evidence-soft);
+      color: var(--evidence-ink);
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .confidence {
+      margin-top: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .normalized-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .norm-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 11px 12px;
+      cursor: pointer;
+    }
+
+    .norm-card:hover,
+    .norm-card.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .norm-card h3 {
+      margin: 0;
+      font-family: var(--serif);
+      font-weight: 560;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+
+    .norm-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .mini {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-family: var(--mono);
+      font-size: 11px;
+      background: var(--meta-soft);
+      color: var(--meta-ink);
+    }
+
+    .variant-list {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      background: var(--chip-soft);
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--chip-ink);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1180px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .panel-body {
+        max-height: none;
+      }
+      header { position: static; }
+      .topbar, .toolbar {
+        grid-template-columns: 1fr;
+      }
+      .stats {
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>__PAGE_TITLE__</h1>
+        <div class="subtitle">Proyecto → tema extraído (con evidencia) → tema normalizado</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong id="statProjects">0</strong><span>proyectos</span></div>
+        <div class="stat"><strong id="statTopics">0</strong><span>temas extraídos</span></div>
+        <div class="stat"><strong id="statNorms">0</strong><span>temas normalizados</span></div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <input id="searchBox" type="search" placeholder="Buscar proyecto, tema, evidencia o tema normalizado">
+      <select id="normFilter">
+        <option value="">Todos los temas normalizados</option>
+      </select>
+      <button id="resetBtn" type="button">Restablecer</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Proyectos y temas extraídos</h2>
+      <div id="projectTree" class="panel-body"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Conexión seleccionada</h2>
+      <div id="flowPanel" class="panel-body flow">
+        <div class="empty">Selecciona un tema extraído o un tema normalizado para ver su trazabilidad.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Temas normalizados</h2>
+      <div id="normalPanel" class="panel-body"></div>
+    </section>
+  </main>
+
+  <script>
+    const DATA = __DATA_JSON__;
+    const state = {
+      query: '',
+      normFilter: '',
+      selectedTopicKey: '',
+      selectedNorm: '',
+    };
+
+    const projectsById = new Map(DATA.projects.map(p => [p.project_id, p]));
+    const topicsByProject = new Map(DATA.project_topics.map(item => [item.project_id, item]));
+    const normsByName = new Map(DATA.normalized_topics.map(item => [item.normalized_topic, item]));
+    const variantToNorm = new Map();
+    DATA.normalized_topics.forEach(norm => {
+      norm.variants.forEach(variant => variantToNorm.set(variant, norm.normalized_topic));
+    });
+
+    function normalizeText(value) {
+      return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function topicKey(projectId, topic) {
+      return `${projectId}::${topic}`;
+    }
+
+    function topicMatches(item, topic) {
+      const normName = variantToNorm.get(topic.topic) || '';
+      const haystack = normalizeText([
+        item.project_id,
+        item.executing_unit,
+        item.title,
+        topic.topic,
+        topic.description,
+        topic.evidence,
+        normName
+      ].join(' '));
+      const matchesQuery = !state.query || haystack.includes(normalizeText(state.query));
+      const matchesNorm = !state.normFilter || normName === state.normFilter;
+      return matchesQuery && matchesNorm;
+    }
+
+    function renderStats() {
+      const totalTopics = DATA.project_topics.reduce((sum, item) => sum + item.topics.length, 0);
+      document.getElementById('statProjects').textContent = DATA.projects.length;
+      document.getElementById('statTopics').textContent = totalTopics;
+      document.getElementById('statNorms').textContent = DATA.normalized_topics.length;
+    }
+
+    function renderFilterOptions() {
+      const select = document.getElementById('normFilter');
+      DATA.normalized_topics.forEach(norm => {
+        const option = document.createElement('option');
+        option.value = norm.normalized_topic;
+        option.textContent = norm.normalized_topic;
+        select.appendChild(option);
+      });
+    }
+
+    function renderProjects() {
+      const root = document.getElementById('projectTree');
+      root.innerHTML = '';
+
+      let visibleProjects = 0;
+      DATA.project_topics.forEach(item => {
+        const visibleTopics = item.topics.filter(topic => topicMatches(item, topic));
+        if (!visibleTopics.length) return;
+        visibleProjects += 1;
+
+        const div = document.createElement('div');
+        div.className = 'proj open';
+        div.dataset.projectId = item.project_id;
+
+        const topicCount = visibleTopics.length;
+        div.innerHTML = `
+          <button class="proj-header" type="button">
+            <span>
+              <span class="proj-title">${escapeHtml(item.title)}</span>
+              <span class="proj-meta">#${escapeHtml(item.project_id)} · ${escapeHtml(item.executing_unit || 'sin unidad')} · ${escapeHtml(item.year)}</span>
+            </span>
+            <span class="pill">${topicCount}</span>
+          </button>
+          <div class="topic-list"></div>
+        `;
+
+        const list = div.querySelector('.topic-list');
+        visibleTopics.forEach(topic => {
+          const row = document.createElement('div');
+          const key = topicKey(item.project_id, topic.topic);
+          row.className = 'topic-row' + (state.selectedTopicKey === key ? ' active' : '');
+          row.dataset.key = key;
+          row.textContent = topic.topic;
+          row.addEventListener('click', () => selectExtractedTopic(item, topic));
+          list.appendChild(row);
+        });
+
+        div.querySelector('.proj-header').addEventListener('click', () => {
+          div.classList.toggle('open');
+        });
+
+        root.appendChild(div);
+      });
+
+      if (!visibleProjects) {
+        root.innerHTML = '<div class="empty">No hay proyectos que coincidan con la búsqueda o filtro.</div>';
+      }
+    }
+
+    function renderNormalized() {
+      const root = document.getElementById('normalPanel');
+      root.innerHTML = '<div class="normalized-grid"></div>';
+      const grid = root.querySelector('.normalized-grid');
+      const query = normalizeText(state.query);
+      let visible = 0;
+
+      DATA.normalized_topics.forEach(norm => {
+        const haystack = normalizeText([
+          norm.normalized_topic,
+          norm.description,
+          norm.variants.join(' '),
+          norm.executing_units.join(' ')
+        ].join(' '));
+        if (state.normFilter && norm.normalized_topic !== state.normFilter) return;
+        if (query && !haystack.includes(query)) return;
+        visible += 1;
+
+        const card = document.createElement('article');
+        card.className = 'norm-card' + (state.selectedNorm === norm.normalized_topic ? ' active' : '');
+        card.innerHTML = `
+          <h3>${escapeHtml(norm.normalized_topic)}</h3>
+          <div class="norm-meta">
+            <span class="mini">${norm.count} variantes</span>
+            <span class="mini">${norm.project_ids.length} proyectos</span>
+            <span class="mini">conf. ${norm.avg_confidence}</span>
+          </div>
+        `;
+        card.addEventListener('click', () => selectNormalizedTopic(norm));
+        grid.appendChild(card);
+      });
+
+      if (!visible) {
+        root.innerHTML = '<div class="empty">No hay temas normalizados que coincidan.</div>';
+      }
+    }
+
+    function selectExtractedTopic(item, topic) {
+      const normName = variantToNorm.get(topic.topic);
+      const norm = normsByName.get(normName);
+      state.selectedTopicKey = topicKey(item.project_id, topic.topic);
+      state.selectedNorm = normName || '';
+      renderProjects();
+      renderNormalized();
+      renderFlowForTopic(item, topic, norm);
+    }
+
+    function selectNormalizedTopic(norm) {
+      state.selectedTopicKey = '';
+      state.selectedNorm = norm.normalized_topic;
+      renderProjects();
+      renderNormalized();
+      renderFlowForNorm(norm);
+    }
+
+    function renderFlowForTopic(item, topic, norm) {
+      const panel = document.getElementById('flowPanel');
+      panel.innerHTML = `
+        <div class="flow-card">
+          <div class="label">Fuente de datos</div>
+          <h3>${escapeHtml(DATA.metadata.dataset_title)}</h3>
+          <p>${escapeHtml(DATA.metadata.source_file)}</p>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-card">
+          <div class="label">Proyecto</div>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>#${escapeHtml(item.project_id)} · ${escapeHtml(item.executing_unit || 'sin unidad')} · ${escapeHtml(item.year)}</p>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-card">
+          <div class="label">Tema extraído</div>
+          <h3>${escapeHtml(topic.topic)}</h3>
+          <p>${escapeHtml(topic.description)}</p>
+          <div class="evidence">${escapeHtml(topic.evidence)}</div>
+          <div class="confidence">confianza: ${topic.confidence}</div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-card">
+          <div class="label">Tema normalizado</div>
+          <h3>${escapeHtml(norm ? norm.normalized_topic : 'Sin normalización')}</h3>
+          <p>${escapeHtml(norm ? norm.description : '')}</p>
+          ${norm ? `<div class="chips">${norm.project_ids.map(id => `<span class="chip">#${escapeHtml(id)}</span>`).join('')}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function renderFlowForNorm(norm) {
+      const panel = document.getElementById('flowPanel');
+      const evidences = norm.evidences.slice(0, 10).map(ev => `
+        <li>
+          <strong>#${escapeHtml(ev.project_id)}</strong> · ${escapeHtml(ev.title)}<br>
+          <span>${escapeHtml(ev.topic)}</span>
+        </li>
+      `).join('');
+      panel.innerHTML = `
+        <div class="flow-card">
+          <div class="label">Tema normalizado</div>
+          <h3>${escapeHtml(norm.normalized_topic)}</h3>
+          <p>${escapeHtml(norm.description)}</p>
+          <div class="chips">
+            <span class="chip">${norm.count} temas extraídos</span>
+            <span class="chip">${norm.project_ids.length} proyectos</span>
+            <span class="chip">confianza media ${norm.avg_confidence}</span>
+          </div>
+        </div>
+        <div class="arrow">↑</div>
+        <div class="flow-card">
+          <div class="label">Variantes agrupadas</div>
+          <ul class="variant-list">
+            ${norm.variants.map(variant => `<li>${escapeHtml(variant)}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="arrow">↑</div>
+        <div class="flow-card">
+          <div class="label">Proyectos conectados</div>
+          <p>${escapeHtml(norm.executing_units.join(' · '))}</p>
+          <div class="chips">${norm.project_ids.map(id => `<span class="chip">#${escapeHtml(id)}</span>`).join('')}</div>
+        </div>
+        <div class="arrow">↑</div>
+        <div class="flow-card">
+          <div class="label">Primeras evidencias</div>
+          <ul class="variant-list">${evidences}</ul>
+        </div>
+      `;
+    }
+
+    function renderAll() {
+      renderProjects();
+      renderNormalized();
+    }
+
+    document.getElementById('searchBox').addEventListener('input', event => {
+      state.query = event.target.value.trim();
+      renderAll();
+    });
+
+    document.getElementById('normFilter').addEventListener('change', event => {
+      state.normFilter = event.target.value;
+      state.selectedTopicKey = '';
+      state.selectedNorm = event.target.value;
+      renderAll();
+      if (state.selectedNorm) {
+        renderFlowForNorm(normsByName.get(state.selectedNorm));
+      }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      state.query = '';
+      state.normFilter = '';
+      state.selectedTopicKey = '';
+      state.selectedNorm = '';
+      document.getElementById('searchBox').value = '';
+      document.getElementById('normFilter').value = '';
+      document.getElementById('flowPanel').innerHTML = '<div class="empty">Selecciona un tema extraído o un tema normalizado para ver su trazabilidad.</div>';
+      renderAll();
+    });
+
+    renderStats();
+    renderFilterOptions();
+    renderAll();
+  </script>
+</body>
+</html>
