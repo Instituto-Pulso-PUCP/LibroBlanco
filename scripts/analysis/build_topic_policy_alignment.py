@@ -60,44 +60,61 @@ FUENTE_LABELS = {
 }
 
 
-def load_policy_chunks():
+def load_policy_chunks(ceplan_remap_path: Path | None = None):
     chunks = []
     with open(POLICY_CORPUS_PATH, encoding="utf-8") as f:
         for line in f:
             chunks.append(json.loads(line))
+
+    if ceplan_remap_path is not None:
+        with open(ceplan_remap_path, encoding="utf-8") as f:
+            remap = json.load(f)
+        n_remapped = 0
+        for c in chunks:
+            if c["fuente"] == "CEPLAN" and c["doc_id"] in remap:
+                entry = remap[c["doc_id"]]
+                c["doc_id"] = entry["cluster_doc_id"]
+                c["titulo"] = entry["cluster_titulo"]
+                n_remapped += 1
+        print(f"CEPLAN: {n_remapped} chunks remapeados a clusters consolidados ({ceplan_remap_path.name})")
+
     return chunks
 
 
-def load_topics():
+def load_topics(scope: str):
     """Returns a flat list of {topic_id, source, normalized_topic, description,
-    count, project_ids, embed_text}."""
+    count, project_ids, embed_text}. ``scope`` limits which source(s) to
+    include ("ambos", "proyectos" or "publicaciones") so a run can be scoped
+    to just the projects taxonomy without requiring the publications file."""
     topics = []
 
-    with open(PROJECTS_TOPICS_PATH, encoding="utf-8") as f:
-        proj = json.load(f)
-    for i, t in enumerate(proj["normalized_topics"]):
-        topics.append({
-            "topic_id": f"proj_{i:03d}",
-            "source": "proyectos",
-            "normalized_topic": t["normalized_topic"],
-            "description": t["description"],
-            "count": t.get("count"),
-            "project_ids": t.get("project_ids", []),
-            "embed_text": f"{t['normalized_topic']}. {t['description']}",
-        })
+    if scope in ("ambos", "proyectos"):
+        with open(PROJECTS_TOPICS_PATH, encoding="utf-8") as f:
+            proj = json.load(f)
+        for i, t in enumerate(proj["normalized_topics"]):
+            topics.append({
+                "topic_id": f"proj_{i:03d}",
+                "source": "proyectos",
+                "normalized_topic": t["normalized_topic"],
+                "description": t["description"],
+                "count": t.get("count"),
+                "project_ids": t.get("project_ids", []),
+                "embed_text": f"{t['normalized_topic']}. {t['description']}",
+            })
 
-    with open(PUBLICATIONS_TOPICS_PATH, encoding="utf-8") as f:
-        pub = json.load(f)
-    for i, t in enumerate(pub["normalized_topics"]):
-        topics.append({
-            "topic_id": f"pub_{i:03d}",
-            "source": "publicaciones",
-            "normalized_topic": t["normalized_topic"],
-            "description": t["description"],
-            "count": t.get("count"),
-            "project_ids": t.get("project_ids", []),
-            "embed_text": f"{t['normalized_topic']}. {t['description']}",
-        })
+    if scope in ("ambos", "publicaciones"):
+        with open(PUBLICATIONS_TOPICS_PATH, encoding="utf-8") as f:
+            pub = json.load(f)
+        for i, t in enumerate(pub["normalized_topics"]):
+            topics.append({
+                "topic_id": f"pub_{i:03d}",
+                "source": "publicaciones",
+                "normalized_topic": t["normalized_topic"],
+                "description": t["description"],
+                "count": t.get("count"),
+                "project_ids": t.get("project_ids", []),
+                "embed_text": f"{t['normalized_topic']}. {t['description']}",
+            })
 
     return topics
 
@@ -182,12 +199,17 @@ def main():
                          help="Embedding model key from scripts/lib/embeddings.py registry")
     parser.add_argument("--top-k", type=int, default=5,
                          help="Numero de politicas mejor alineadas a guardar por tema")
+    parser.add_argument("--scope", choices=["ambos", "proyectos", "publicaciones"], default="ambos",
+                         help="Que conjunto de temas normalizados incluir en el contraste")
+    parser.add_argument("--ceplan-remap", type=Path, default=None,
+                         help="JSON de build_ceplan_consolidation.py; colapsa los 762 documentos "
+                              "CEPLAN en sus clusters consolidados antes del mean-pooling por doc_id")
     args = parser.parse_args()
 
-    chunks = load_policy_chunks()
+    chunks = load_policy_chunks(args.ceplan_remap)
     print(f"{len(chunks)} chunks de politicas cargados de {POLICY_CORPUS_PATH.name}")
 
-    topics = load_topics()
+    topics = load_topics(args.scope)
     print(f"{len(topics)} temas normalizados cargados "
           f"({sum(1 for t in topics if t['source']=='proyectos')} proyectos, "
           f"{sum(1 for t in topics if t['source']=='publicaciones')} publicaciones)")
@@ -291,13 +313,22 @@ def main():
                 "Los documentos de politica se agregan por promedio de embeddings de "
                 "sus paginas/chunks; la evidencia textual mostrada es el chunk "
                 "individual con mayor similitud al tema dentro de ese documento."
+                + (
+                    " Los 762 documentos CEPLAN (megatendencias atomicas) se consolidaron "
+                    "en 60 clusters tematicos (build_ceplan_consolidation.py) antes de este "
+                    "calculo; PN/PESEM/PEDN/CONCYTEC/PP se mantienen sin cambios."
+                    if args.ceplan_remap is not None else ""
+                )
             ),
         },
         "topics": topic_results,
         "policies": policy_results,
     }
 
-    out_path = OUT_DIR / f"topic_policy_alignment_{args.model}.json"
+    suffix = "" if args.scope == "ambos" else f"_{args.scope}"
+    if args.ceplan_remap is not None:
+        suffix += "_ceplan-consolidado"
+    out_path = OUT_DIR / f"topic_policy_alignment_{args.model}{suffix}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

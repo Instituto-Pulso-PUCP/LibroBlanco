@@ -552,11 +552,15 @@
           const card = document.createElement('article');
           card.className = 'row-card' + (state.selectedTopicId === topic.topic_id ? ' active' : '');
           const badgeClass = topic.source === 'proyectos' ? 'badge-proyectos' : 'badge-publicaciones';
+          const pubBadge = topic.num_publications !== undefined
+            ? `<span class="badge badge-publicaciones">${topic.num_publications} publicaciones</span>`
+            : '';
           card.innerHTML = `
             <h3>${escapeHtml(topic.normalized_topic)}</h3>
             <div class="row-meta">
               <span class="badge ${badgeClass}">${escapeHtml(topic.source)}</span>
               <span class="badge badge-fuente">${topic.count || 0} variantes</span>
+              ${pubBadge}
             </div>
             ${scoreBar(bestScore(topic), 0.7)}
           `;
@@ -611,6 +615,22 @@
           <div class="evidence-meta">chunk ${escapeHtml(m.evidence_chunk_id)} · páginas ${escapeHtml((m.evidence_paginas || []).join(', '))}</div>
         </div>
       `).join('');
+      const pubBadge = topic.num_publications !== undefined
+        ? `<span class="badge badge-publicaciones">${topic.num_publications} publicaciones</span>`
+        : '';
+      const pubList = (topic.publication_topics && topic.publication_topics.length)
+        ? `
+        <div class="detail-card" style="background:transparent; border:0; box-shadow:none; padding:0 2px;">
+          <div class="label">Temas de publicaciones agrupados aquí (${topic.publication_topics.length})</div>
+        </div>
+        <div class="detail-card">
+          <ul style="margin:0; padding-left:18px;">
+            ${topic.publication_topics.map(p => `
+              <li>${escapeHtml(p.publication_topic)} — ${p.count} ${p.count === 1 ? 'paper' : 'papers'}</li>
+            `).join('')}
+          </ul>
+        </div>
+      ` : '';
       panel.innerHTML = `
         <div class="detail-card">
           <div class="label">Tema normalizado</div>
@@ -619,8 +639,10 @@
           <div class="row-meta" style="margin-top:10px;">
             <span class="badge ${badgeClass}">${escapeHtml(topic.source)}</span>
             <span class="badge badge-fuente">${topic.count || 0} variantes agrupadas</span>
+            ${pubBadge}
           </div>
         </div>
+        ${pubList}
         <div class="detail-card" style="background:transparent; border:0; box-shadow:none; padding:0 2px;">
           <div class="label">Políticas mejor alineadas</div>
         </div>

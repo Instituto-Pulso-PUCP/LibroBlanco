@@ -133,7 +133,8 @@ def connect():
     return sqlite3.connect(DB)
 
 def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
-          merge_resumenes=False, resumenes_path=None):
+          merge_resumenes=False, resumenes_path=None,
+          merge_cris_data=False, cris_path=None, cris_overrides_path=None):
     OUT.mkdir(exist_ok=True)
     con = connect()
     print('01 projects...', flush=True)
@@ -150,7 +151,60 @@ def build(enrich_openalex=True, limit=None, make_xlsx=True, use_cache=True,
         'project_id':'project_id','CÓDIGO DE PROYECTO':'codigo_actividad','cod_aeri':'cod_aeri','CÓDIGO CAMPUS':'codigo_campus','year':'year','Título':'title','title_norm':'title_norm','Estado':'status','Tipo de Proyecto':'project_type','Área de Conocimiento':'knowledge_area','Linea de Investigación 1':'research_line_1','Linea de Investigación 2':'research_line_2','Linea de Investigación 3':'research_line_3','Linea de Investigación 4':'research_line_4','LÍNEA DE INVESTIGACIÓN HOMOLOGADA':'research_line','UNIDAD EJECUTORA':'executing_unit','SECCIÓN EJECUTORA':'executing_section','COORDINADOR DE LA INVESTIGACIÓN':'coordinator_original','coordinator_norm':'coordinator_norm','UNIDAD DE GESTIÓN':'management_unit','Tipo de Financiamiento':'funding_type','Entidad Financiadora':'funder'
     }
     closed_out = closed[list(project_cols.keys())].rename(columns=project_cols)
-    closed_out.to_sql('projects', con, index=False)
+    closed_out['project_id'] = closed_out['project_id'].astype(int)
+    closed_out['source'] = 'VRI'
+
+    if merge_cris_data:
+        try:
+            import merge_cris as mc
+            found_cris_path = cris_path or mc.find_default_cris_csv()
+            if found_cris_path and Path(found_cris_path).exists():
+                cris_df = mc.load_cris(Path(found_cris_path))
+                full_index = mc.load_full_project_index(INPUT)
+
+                overrides = mc.load_overrides(Path(cris_overrides_path)) if cris_overrides_path else {}
+                cris_df, manual_matches, forced_new, override_report_rows = mc.apply_overrides(
+                    cris_df, overrides, valid_project_ids=set(closed_out['project_id']))
+
+                closed_out, stats, new_candidates, report_rows = mc.match_and_merge(
+                    closed_out, cris_df, full_index, fuzzy_threshold=0.65, new_row_min_score=0.35)
+                report_rows += override_report_rows
+
+                for cris_row, pid in manual_matches:
+                    idx = closed_out.index[closed_out['project_id'] == pid]
+                    if idx.empty:
+                        continue
+                    existing_method = closed_out.loc[idx, 'cris_match_method'].iloc[0]
+                    if existing_method:
+                        continue
+                    for col in mc.CRIS_ENRICH_COLS:
+                        closed_out.loc[idx, col] = getattr(cris_row, col)
+                    closed_out.loc[idx, 'cris_match_method'] = 'manual_match'
+
+                next_id = (closed_out['project_id'].astype(int).max() if len(closed_out) else 0) + 1
+                new_rows, next_id = mc.build_new_rows(new_candidates, closed_out, next_id, CONFIG['year_start'], report_rows)
+                for cris_row in forced_new:
+                    new_rows.append(mc._build_project_row(
+                        cris_row, next_id, closed_out.columns, mc._row_year(cris_row), 'new_row_manual'))
+                    next_id += 1
+                if new_rows:
+                    closed_out = pd.concat([closed_out, pd.DataFrame(new_rows)], ignore_index=True)
+
+                review_path = OUT / '01_projects_closed_cris_review.csv'
+                pd.DataFrame(report_rows).to_csv(review_path, index=False, encoding='utf-8-sig')
+                print(
+                    f'CRIS integrado: {len(closed_out)} filas totales '
+                    f'({stats["code"]} por codigo, {stats["title_exact"]} por titulo exacto, '
+                    f'{stats["title_fuzzy"]} por titulo difuso, {len(new_rows)} filas nuevas de CRIS) '
+                    f'-> {review_path.name} ({len(report_rows)} filas CRIS ambiguas/excluidas)',
+                    flush=True,
+                )
+            else:
+                print('WARNING: --with-cris activado pero no se encontro un CSV de CRIS; se omite.', flush=True)
+        except Exception as exc:
+            print(f'WARNING: no se pudo integrar CRIS: {exc}', flush=True)
+
+    closed_out.to_sql('projects', con, index=False, if_exists='replace')
     closed_out.to_csv(OUT/'01_projects_closed.csv', index=False, encoding='utf-8-sig')
 
     print('02 investigators...', flush=True)
@@ -500,6 +554,15 @@ def parse_args(argv=None):
                              'directamente en las salidas 06 y 07 (cruce por DOI).')
     parser.add_argument('--resumenes', type=Path, default=None,
                         help='Ruta al CSV de resumenes (por defecto, se busca en la carpeta "Obtencion de resumenes").')
+    parser.add_argument('--with-cris', action='store_true',
+                        help='Fusiona el export de DSpace-CRIS (ProyectosPUCPCRIS-*.csv) directamente en '
+                             '01_projects_closed.csv: agrega columnas cris_* y proyectos nuevos que solo '
+                             'existen en CRIS (mismo filtro cerrado/2010+).')
+    parser.add_argument('--cris', type=Path, default=None,
+                        help='Ruta al CSV de CRIS (por defecto, el mas reciente en datos/ProyectosPUCPCRIS*.csv).')
+    parser.add_argument('--cris-overrides', type=Path, default=None,
+                        help='CSV con decisiones manuales (cris_uuid, action, target_project_id) para filas '
+                             'CRIS ambiguas. Ver datos/cris_overrides.csv.')
     return parser.parse_args(argv)
 
 
@@ -512,5 +575,8 @@ if __name__ == '__main__':
         use_cache=not args.no_cache,
         merge_resumenes=args.with_resumenes,
         resumenes_path=args.resumenes,
+        merge_cris_data=args.with_cris,
+        cris_path=args.cris,
+        cris_overrides_path=args.cris_overrides,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))

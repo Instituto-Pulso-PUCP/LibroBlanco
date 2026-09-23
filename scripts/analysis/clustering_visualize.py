@@ -272,7 +272,7 @@ def run(dataset_name, scatter_for=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--dataset', required=True, choices=['projects', 'publications'])
+    parser.add_argument('--dataset', required=True, choices=['projects', 'publications', 'publications_linked'])
     parser.add_argument('--scatter-for', default=None,
                         help='Comma-separated model__method combos to plot (default: best by silhouette).')
     return parser.parse_args()

@@ -482,16 +482,16 @@
     <div class="topbar">
       <div>
         <h1>Atlas de Temas PUCP — Proyectos y Publicaciones</h1>
-        <div class="subtitle">Proyecto → tema extraído (con evidencia) → tema normalizado</div>
+        <div class="subtitle">Proyecto o publicación → tema extraído (con evidencia) → tema normalizado</div>
       </div>
       <div class="stats">
-        <div class="stat"><strong id="statProjects">0</strong><span>proyectos</span></div>
+        <div class="stat"><strong id="statProjects">0</strong><span>proyectos y publicaciones</span></div>
         <div class="stat"><strong id="statTopics">0</strong><span>temas extraídos</span></div>
         <div class="stat"><strong id="statNorms">0</strong><span>temas normalizados</span></div>
       </div>
     </div>
     <div class="toolbar">
-      <input id="searchBox" type="search" placeholder="Buscar proyecto, tema, evidencia o tema normalizado">
+      <input id="searchBox" type="search" placeholder="Buscar proyecto, publicación, tema, evidencia o tema normalizado">
       <select id="normFilter">
         <option value="">Todos los temas normalizados</option>
       </select>
@@ -501,7 +501,7 @@
 
   <main>
     <section class="panel">
-      <h2>Proyectos y temas extraídos</h2>
+      <h2>Proyectos, publicaciones y temas extraídos</h2>
       <div id="projectTree" class="panel-body"></div>
     </section>
 
@@ -630,7 +630,7 @@
       });
 
       if (!visibleProjects) {
-        root.innerHTML = '<div class="empty">No hay proyectos que coincidan con la búsqueda o filtro.</div>';
+        root.innerHTML = '<div class="empty">No hay resultados que coincidan con la búsqueda o filtro.</div>';
       }
     }
 
@@ -658,7 +658,7 @@
           <h3>${escapeHtml(norm.normalized_topic)}</h3>
           <div class="norm-meta">
             <span class="mini">${norm.count} variantes</span>
-            <span class="mini">${norm.project_ids.length} proyectos</span>
+            <span class="mini">${norm.project_ids.length} proyectos y publicaciones</span>
             <span class="mini">conf. ${norm.avg_confidence}</span>
           </div>
         `;
@@ -699,7 +699,7 @@
         </div>
         <div class="arrow">↓</div>
         <div class="flow-card">
-          <div class="label">Proyecto</div>
+          <div class="label">${item.track === 'publicacion' ? 'Publicación' : 'Proyecto'}</div>
           <h3>${escapeHtml(item.title)}</h3>
           <p>#${escapeHtml(item.project_id)} · ${escapeHtml(item.executing_unit || 'sin unidad')} · ${escapeHtml(item.year)}</p>
         </div>
@@ -736,7 +736,7 @@
           <p>${escapeHtml(norm.description)}</p>
           <div class="chips">
             <span class="chip">${norm.count} temas extraídos</span>
-            <span class="chip">${norm.project_ids.length} proyectos</span>
+            <span class="chip">${norm.project_ids.length} proyectos y publicaciones</span>
             <span class="chip">confianza media ${norm.avg_confidence}</span>
           </div>
         </div>
@@ -749,7 +749,7 @@
         </div>
         <div class="arrow">↑</div>
         <div class="flow-card">
-          <div class="label">Proyectos conectados</div>
+          <div class="label">Proyectos y publicaciones conectados</div>
           <p>${escapeHtml(norm.executing_units.join(' · '))}</p>
           <div class="chips">${norm.project_ids.map(id => `<span class="chip">#${escapeHtml(id)}</span>`).join('')}</div>
         </div>

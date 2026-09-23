@@ -57,11 +57,35 @@ declared results (850/1,192 rows). See §5.
    not required for this fix).
    - Real abstract coverage: 69.3% (fake, URL-polluted) → **40.1%** (5,614/13,995, honest) → OpenAlex backfill in progress for the remaining 8,381 empty rows.
 3. **OpenAlex abstract backfill** (`scripts/addons/enrich_abstracts_openalex.py`,
-   in progress): looks up each publication with an empty abstract by DOI
-   (preferred) or title fallback via the OpenAlex API (free, no key needed),
-   reconstructs the abstract text, fills gaps only — never overwrites an
-   existing real abstract. Resumable via `salidas/openalex_cache.jsonl`.
+   complete, stopped by explicit choice rather than exhausting the queue):
+   looks up each publication with an empty abstract by DOI (preferred) or
+   title fallback via the OpenAlex API (free, no key needed), reconstructs
+   the abstract text, fills gaps only — never overwrites an existing real
+   abstract. Resumable via `salidas/openalex_cache.jsonl`. Final abstract
+   coverage: **10,245/13,995 (73.2%)** — 3,750 rows have no recoverable
+   abstract from any source (no DOI match, or OpenAlex has none either).
+   - **Provenance tracked**: `abstract_source` column added to
+     `03_publications_master.csv` (WOS/RI: 5,614; OpenAlex: 4,631; empty:
+     3,750) — reconstructed from `publication_sources` in
+     `libro_blanco.db` (which source rows had a real, non-Scopus abstract)
+     rather than tracked live during the backfill, since the fix and the
+     backfill both predate this column existing.
+   - Ran into repeated multi-hour stalls mid-run (Windows DNS resolution
+     hanging past the per-request timeout) — fixed with
+     `socket.setdefaulttimeout(15)` and resumed from the on-disk cache each
+     time; no data was lost, each stall just cost wall-clock time.
 4. → **`salidas/03_publications_master.csv`, 13,995 rows** (canonical).
+
+### Project-linked publications subset (third experiment)
+Built from `07_project_publication_ground_truth.csv` (all 1,192 declared
+results across the 361 ground-truth projects — not just the 376/386 that
+resolved into the full catalog by DOI) via
+`scripts/addons/build_linked_publications_subset.py`. For rows that matched
+into the master catalog, reuses its vetted title/abstract/keywords/journal;
+for the rest, falls back to the ground-truth file's own columns (`result_title`,
+`resumen`/`openalex_abstract`, `source_keywords`+`palabras_clave`,
+`journal_raw`), with the `"-"` placeholder cleaned to empty and the same
+Scopus-URL-junk pattern excluded from `source_abstract`. → **`salidas/07_publications_linked_full.csv`, 1,192 rows, 850 with at least one non-empty text field** (342 dropped — no title, abstract, keywords, or journal at all).
 
 ---
 
@@ -70,14 +94,18 @@ declared results (850/1,192 rows). See §5.
 | Dataset | File | Rows | Universe |
 |---|---|---|---|
 | Projects | `salidas/01_projects_closed.csv` | 975 | Closed projects, year ≥ 2010 (VRI) + CRIS-only closed/2010+ projects not in the VRI Excel |
-| Publications | `salidas/03_publications_master.csv` | 13,995 | All deduplicated Scopus+WoS+RI publication records — full PUCP catalog captured in those exports, **not** restricted to project-linked publications |
+| Publications (full catalog) | `salidas/03_publications_master.csv` | 13,995 | All deduplicated Scopus+WoS+RI publication records — full PUCP catalog captured in those exports, **not** restricted to project-linked publications |
+| Publications (project-linked) | `salidas/07_publications_linked_full.csv` | 1,192 (850 embedded) | Every declared result of the 361 ground-truth-linked closed projects, not just the 376/386 that resolved into the full catalog by DOI |
 
-Decision explicitly made: use the **full publications catalog**, not the
-smaller project-linked subset (~376 unique / 1,192 declared-result rows),
-because it has far better title/abstract/keyword coverage and gives more
-statistical power — see prior discussion for the tradeoff (narrative
-consistency with "these are our tracked projects' outputs" vs. data richness;
-richness won).
+Three separate experiments, kept separate rather than merged, because they
+answer three different questions: **projects** = what topics did our closed
+projects work on (from project metadata, no publication text at all);
+**publications, full catalog** = what does PUCP's entire captured research
+output look like, most of it unconnected to any tracked project (richer text,
+far more statistical power, but only ~2.7% of it traces back to a tracked
+project); **publications, project-linked** = what did *specifically* our
+tracked projects' declared results look like, at the cost of a much smaller,
+patchier-text sample (850 usable of 1,192). See §5 for results side by side.
 
 ---
 
