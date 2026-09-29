@@ -153,6 +153,31 @@ def examples(cfg, store, rows, topics, units, raw_topics):
     return {"main": main_cell, "big": describe(big), "small": describe(small)}
 
 
+def attach_ceplan(domain: str, run_id: str, topics: dict) -> None:
+    """Cuelga, en cada tema, su mejor calce con el PEDN 2050 / Objetivos
+    Nacionales (scripts/analysis/ceplan_alignment.py), si ya se corrió para
+    este run. Sin ese archivo, la pestaña de Objetivos Nacionales sale vacia
+    en vez de romperse -- el cruce es un cruce aparte, no una etapa obligatoria
+    del pipeline."""
+    path = ROOT / "salidas" / "topics" / domain / run_id / "06_ceplan_alignment.json"
+    if not path.exists():
+        return
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for row in data.get("rows", []):
+        tid = row["topic_id"]
+        if tid not in topics:
+            continue
+        entry = {"i": row["best_on_via_subtema"], "l": row["best_on_label"],
+                 "t": row["best_tema"], "s": row["best_subtema"],
+                 "sc": row["score_subtema"], "di": row["on_direct_id"],
+                 "dl": row["on_direct_label"], "dsc": row["score_on_direct"],
+                 "ok": row["agrees_direct_vs_subtema"]}
+        if row.get("secondary_best_on"):
+            entry.update({"si": row["secondary_best_on"], "ss": row["secondary_best_subtema"],
+                         "ssc": row["secondary_score"]})
+        topics[tid]["on"] = entry
+
+
 def collect(cfg, domain: str, run_id: str) -> dict:
     store = lb_store.open_store(cfg, domain, run_id)
     raw_topics = {t["topic_id"]: t for t in store.read_topics()}
@@ -182,6 +207,7 @@ def collect(cfg, domain: str, run_id: str) -> dict:
     cells.sort(key=lambda c: (c[0], -c[2]))
     side = partition.get("unit_side") or {}
     label, noun = NOUNS.get(domain, (domain, "unidad"))
+    attach_ceplan(domain, run_id, topics)
     return {"run": run_id, "label": label, "noun": noun,
             "topics": topics, "units": units, "cells": cells,
             "ex": examples(cfg, store, rows, topics, units, raw_topics),

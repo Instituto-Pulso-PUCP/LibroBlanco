@@ -207,6 +207,7 @@ footer p{margin:0 0 6px;max-width:78ch}
     <button type="button" id="dom-pubs" data-dom="publications_linked" aria-pressed="false">Publicaciones de proyectos</button>
     <button type="button" id="dom-method" data-dom="__method__" aria-pressed="false">Metodología</button>
     <button type="button" id="dom-provenance" data-dom="__provenance__" aria-pressed="false">Datos de origen</button>
+    <button type="button" id="dom-ceplan" data-dom="__ceplan__" aria-pressed="false">Objetivos Nacionales</button>
   </div>
 
   <dl class="metrics" id="metrics"></dl>
@@ -243,6 +244,7 @@ footer p{margin:0 0 6px;max-width:78ch}
 
   <section class="method" id="method" hidden></section>
   <section class="method" id="provenance" hidden></section>
+  <section class="method" id="ceplan" hidden></section>
 
   <footer>
     <p id="prov"></p>
@@ -612,6 +614,28 @@ footer p{margin:0 0 6px;max-width:78ch}
       });
       box.appendChild(chips);
 
+      if (t.on){
+        var onRow = el('div','chips');
+        var onChip = el('span','chip'); onChip.title = t.on.l;
+        onChip.appendChild(document.createTextNode('Objetivo Nacional (PEDN 2050) '));
+        onChip.appendChild(el('b', null, t.on.i + ' · ' + t.on.s));
+        onRow.appendChild(onChip);
+        var scChip = el('span','chip');
+        scChip.title = 'Similitud coseno, no un porcentaje: no suma 100 % con nada.';
+        scChip.appendChild(document.createTextNode('similitud (coseno) '));
+        scChip.appendChild(el('b', null, t.on.sc.toFixed(3)));
+        onRow.appendChild(scChip);
+        if (!t.on.ok){
+          var warnChip = el('span','chip');
+          warnChip.title = 'Contra el centroide del ON directamente, el mejor calce es ' + t.on.dl +
+            ' (similitud ' + t.on.dsc.toFixed(3) + ') — no coincide con la sub-temática más parecida.';
+          warnChip.appendChild(document.createTextNode('⚠ discrepa con '));
+          warnChip.appendChild(el('b', null, t.on.di));
+          onRow.appendChild(warnChip);
+        }
+        box.appendChild(onRow);
+      }
+
       var maxK = rows.length ? rows[0].k : 1;
       var wrap = el('div','tablewrap'), tbl = el('table');
       tbl.innerHTML = '<thead><tr>' +
@@ -682,20 +706,119 @@ footer p{margin:0 0 6px;max-width:78ch}
     }
   }
 
+  function gotoTopic(d, id){
+    dom = d; sel = {kind: 't', id: id}; query = '';
+    document.getElementById('q').value = '';
+    document.querySelectorAll('.domains button').forEach(function(o){
+      o.setAttribute('aria-pressed', String(o.dataset.dom === d));
+    });
+    document.getElementById('explorer').hidden = false;
+    document.getElementById('method').hidden = true;
+    document.getElementById('provenance').hidden = true;
+    document.getElementById('ceplan').hidden = true;
+    document.querySelector('.metrics').hidden = false;
+    document.querySelector('.legend').hidden = false;
+    renderMetrics(); renderList(); renderDetail();
+    document.getElementById('detail').scrollIntoView({block: 'nearest'});
+  }
+
+  function renderCeplan(){
+    var box = document.getElementById('ceplan');
+    box.textContent = '';
+    box.appendChild(el('h2', null, 'Temas vs. Objetivos Nacionales (PEDN 2050)'));
+    box.appendChild(el('p', 'desc', 'Cada tema normalizado comparado, por embeddings, contra la ' +
+      'taxonomía oficial de CEPLAN (hoja "Líneas de Inv." del PEDN 2050: 4 Objetivos Nacionales, ' +
+      '126 sub-temáticas). No se compara con ningún otro plan o política. El ⚠ marca los temas ' +
+      'donde la sub-temática más parecida y el Objetivo Nacional de mayor similitud directa no ' +
+      'coinciden — pasa en aproximadamente un tercio de los casos; se deja visible en vez de ' +
+      'resolverse en silencio.'));
+
+    var any = false;
+    Object.keys(DATA).forEach(function(d){
+      var D = DATA[d];
+      var ids = Object.keys(D.topics).filter(function(id){ return D.topics[id].on; });
+      if (!ids.length) return;
+      any = true;
+
+      box.appendChild(el('h3', null, NAMES[d] || d));
+
+      var byOn = {};
+      ids.forEach(function(id){
+        var t = D.topics[id], key = t.on.i;
+        if (!byOn[key]) byOn[key] = {label: t.on.l, ids: []};
+        byOn[key].ids.push(id);
+      });
+      var onKeys = Object.keys(byOn);
+      onKeys.forEach(function(k){
+        byOn[k].eq = byOn[k].ids.reduce(function(s, id){ return s + (D.topics[id].eq || 0); }, 0);
+      });
+      onKeys.sort(function(a, b){ return byOn[b].eq - byOn[a].eq; });
+      var totalEq = onKeys.reduce(function(s, k){ return s + byOn[k].eq; }, 0) || 1;
+
+      var wrap = el('div', 'tablewrap'), tbl = el('table');
+      tbl.innerHTML = '<thead><tr><th>Objetivo Nacional</th>' +
+        '<th class="c">Unidades-equiv.<span class="hint">vía mejor sub-temática de cada tema</span></th>' +
+        '<th class="c">% del corpus</th></tr></thead>';
+      var tb = el('tbody');
+      onKeys.forEach(function(k){
+        var tr = el('tr');
+        tr.appendChild(el('td', null, byOn[k].label));
+        var td1 = el('td', 'c'); td1.textContent = byOn[k].eq.toFixed(1); tr.appendChild(td1);
+        var td2 = el('td', 'c'); td2.textContent = (byOn[k].eq / totalEq * 100).toFixed(1) + ' %';
+        tr.appendChild(td2);
+        tb.appendChild(tr);
+      });
+      tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
+
+      onKeys.forEach(function(k){
+        var group = byOn[k];
+        var h4 = el('h3', null, group.label); h4.style.cssText = 'margin:18px 2px 6px;font-size:14.5px';
+        box.appendChild(h4);
+        var listWrap = el('div', 'tablewrap'), t2 = el('table');
+        t2.innerHTML = '<thead><tr><th>Tema</th><th>Sub-temática (PEDN 2050)</th>' +
+          '<th class="c">similitud<span class="hint">coseno, no un %</span></th>' +
+          '<th class="c">eq</th></tr></thead>';
+        var tb2 = el('tbody');
+        group.ids.sort(function(a, b){ return (D.topics[b].eq || 0) - (D.topics[a].eq || 0); });
+        group.ids.forEach(function(id){
+          var t = D.topics[id], tr = el('tr'), td = el('td');
+          var btn = el('button', 'linkish', t.l); btn.type = 'button';
+          btn.addEventListener('click', function(){ gotoTopic(d, id); });
+          td.appendChild(btn);
+          if (!t.on.ok){
+            var w = el('span'); w.title = 'Discrepa con el ON de mayor similitud directa: ' + t.on.dl;
+            w.textContent = ' ⚠'; td.appendChild(w);
+          }
+          tr.appendChild(td);
+          tr.appendChild(el('td', null, t.on.s));
+          var tdsc = el('td', 'c'); tdsc.textContent = t.on.sc.toFixed(3); tr.appendChild(tdsc);
+          var tdeq = el('td', 'c'); tdeq.textContent = (t.eq || 0).toFixed(1); tr.appendChild(tdeq);
+          tb2.appendChild(tr);
+        });
+        t2.appendChild(tb2); listWrap.appendChild(t2); box.appendChild(listWrap);
+      });
+    });
+    if (!any) box.appendChild(el('p', 'note', 'Todavía no hay un cruce con CEPLAN para ninguna ' +
+      'de las corridas cargadas (scripts/analysis/ceplan_alignment.py).'));
+  }
+
   document.querySelectorAll('.domains button').forEach(function(b){
     b.addEventListener('click', function(){
       document.querySelectorAll('.domains button').forEach(function(o){
         o.setAttribute('aria-pressed', String(o === b)); });
       var isMethod = b.dataset.dom === '__method__';
       var isProvenance = b.dataset.dom === '__provenance__';
-      var isSpecial = isMethod || isProvenance;
+      var isCeplan = b.dataset.dom === '__ceplan__';
+      var isSpecial = isMethod || isProvenance || isCeplan;
       document.getElementById('explorer').hidden = isSpecial;
       document.getElementById('method').hidden = !isMethod;
       document.getElementById('provenance').hidden = !isProvenance;
+      document.getElementById('ceplan').hidden = !isCeplan;
       document.querySelector('.metrics').hidden = isSpecial;
       document.querySelector('.legend').hidden = isSpecial;
       if (isMethod){ renderMethod(); return; }
       if (isProvenance){ renderProvenance(); return; }
+      if (isCeplan){ renderCeplan(); return; }
       dom = b.dataset.dom; sel = null; query=''; document.getElementById('q').value='';
       renderMetrics(); renderList(); renderDetail();
     });
