@@ -206,6 +206,7 @@ footer p{margin:0 0 6px;max-width:78ch}
     <button type="button" id="dom-projects" data-dom="projects" aria-pressed="true">Proyectos</button>
     <button type="button" id="dom-pubs" data-dom="publications_linked" aria-pressed="false">Publicaciones de proyectos</button>
     <button type="button" id="dom-method" data-dom="__method__" aria-pressed="false">Metodología</button>
+    <button type="button" id="dom-provenance" data-dom="__provenance__" aria-pressed="false">Datos de origen</button>
   </div>
 
   <dl class="metrics" id="metrics"></dl>
@@ -241,6 +242,7 @@ footer p{margin:0 0 6px;max-width:78ch}
   </div>
 
   <section class="method" id="method" hidden></section>
+  <section class="method" id="provenance" hidden></section>
 
   <footer>
     <p id="prov"></p>
@@ -429,44 +431,80 @@ footer p{margin:0 0 6px;max-width:78ch}
            'de los temas miembros, no una cita. El LLM <b>nombra</b> el grupo; no decide quién entra ' +
            'en él, eso ya lo resolvió la similitud coseno.</p>');
 
-    h.push('<h3>Insumos por experimento</h3>');
-    h.push('<p>Qué columnas aportan texto y en qué proporción de las filas están llenas. ');
-    Object.keys(META).forEach(function(d){
-      var m = META[d];
-      // En proyectos, cris_*, source_* y openalex_abstract son insumos
-      // auxiliares que aqui solo agregan ruido a la tabla de llenado; no
-      // afectan el pipeline, solo esta vista. openalex_abstract en particular
-      // no es un abstract del PROYECTO (OpenAlex no indexa proyectos, solo
-      // publicaciones) -- es el abstract de un RESULTADO DECLARADO del
-      // proyecto (una publicacion que produjo), recuperado de OpenAlex cuando
-      // esa publicacion no traia abstract propio en CRIS/Scopus/WoS. Se anota
-      // debajo de la tabla en vez de ocultarlo sin explicacion.
-      var cols = d === 'projects' ? m.cols.filter(function(c){
-        var name = c.n.replace('aux:','');
-        return !/^cris/i.test(name) && !/^source/i.test(name) && name !== 'openalex_abstract';
-      }) : m.cols;
-      var hadOpenAlex = d === 'projects' &&
-        m.cols.some(function(c){ return c.n.replace('aux:','') === 'openalex_abstract'; });
-      h.push('<div class="exp"><div class="exp-head"><span class="nm">'+NAMES[d]+'</span>' +
-             '<span class="fl">'+m.src+' · '+m.rows.toLocaleString('es')+' filas → '+
-             m.units.toLocaleString('es')+' unidades' +
-             (m.dropped ? ' · '+m.dropped.toLocaleString('es')+' descartadas (sin ninguna de '+
-               m.req.join('/')+')' : '') +
-             ' · mediana '+m.chars.p50.toLocaleString('es')+' caracteres por unidad</span></div>' +
-             '<table class="fills"><tbody>');
-      cols.forEach(function(c){
-        h.push('<tr><td class="cn">'+c.n.replace('aux:','')+'</td>' +
-               '<td class="bar-td"><div class="track"><i style="width:'+
-               Math.max(1.5,c.f*100).toFixed(1)+'%;background:var(--contain)"></i></div></td>' +
-               '<td class="pc">'+(c.f*100).toFixed(1)+' %  ·  '+c.r.toLocaleString('es')+'</td></tr>');
-      });
-    });
+    h.push('<p class="note" style="margin:-4px 0 18px">De dónde sale cada dato, cuántas filas ' +
+           'se descartaron y con qué texto quedó cada unidad: pestaña <b>Datos de origen</b>.</p>');
 
     h.push('<h3>Modelos</h3>');
     h.push('<p>Extracción y nombrado: <code>Claude Sonnet 5</code> en Amazon Bedrock, temperatura ' +
            'no aplicable (eliminada en este modelo), esfuerzo <code>low</code>. Embeddings: ' +
            '<code>cohere.embed-multilingual-v3</code>, 1024 dimensiones, textos de más de 2048 ' +
            'caracteres troceados y promediados. Los vectores se guardan en PostgreSQL con pgvector.</p>');
+    box.innerHTML = h.join('');
+  }
+
+  function renderProvenance(){
+    var box = document.getElementById('provenance');
+    if (box.dataset.done) return;
+    box.dataset.done = '1';
+    var h = [];
+    h.push('<h2>De dónde vienen los datos</h2>');
+    h.push('<p>Antes de cualquier tema o porcentaje, cada universo pasó por un embudo de ' +
+           'calidad: de todo lo que existe en los registros de la universidad, solo una parte ' +
+           'tenía texto propio suficiente para un análisis semántico serio. Esta pestaña muestra ' +
+           'ese embudo —de dónde salió cada número y por qué se decidió cortar ahí— y cuánto ' +
+           'texto quedó al final en cada unidad.</p>');
+
+    Object.keys(META).forEach(function(d){
+      var m = META[d], prov = m.provenance || {steps: [], why: ''};
+      h.push('<h3>' + NAMES[d] + '</h3>');
+
+      h.push('<div class="flow">');
+      prov.steps.forEach(function(s, i){
+        h.push('<div class="step"><span class="n">' + (i + 1) + ' de ' + prov.steps.length +
+               '</span><span class="t">' + s.n.toLocaleString('es') + '</span>' +
+               '<span class="d"><b>' + s.label + '</b><br>' + s.note + '</span></div>');
+      });
+      h.push('</div>');
+      if (prov.why) h.push('<p class="note" style="margin:9px 2px 16px">' + prov.why + '</p>');
+
+      h.push('<div class="chips">' + [
+        ['Caracteres por unidad · mediana', m.chars.p50],
+        ['media', Math.round(m.chars.mean)],
+        ['p95', m.chars.p95],
+        ['máximo', m.chars.max],
+      ].map(function(c){
+        return '<span class="chip">' + c[0] + ' <b>' + c[1].toLocaleString('es') + '</b></span>';
+      }).join('') + '</div>');
+
+      // Tabla de llenado por columna: de que insumo sale el texto de cada unidad.
+      var cols = d === 'projects' ? m.cols.filter(function(c){
+        var name = c.n.replace('aux:', '');
+        return !/^cris/i.test(name) && !/^source/i.test(name) && name !== 'openalex_abstract';
+      }) : m.cols;
+      var hadOpenAlex = d === 'projects' &&
+        m.cols.some(function(c){ return c.n.replace('aux:', '') === 'openalex_abstract'; });
+      h.push('<div class="exp" style="margin-top:14px"><div class="exp-head">' +
+             '<span class="nm">Qué columnas aportan ese texto</span>' +
+             '<span class="fl">' + m.src + ' · ' + m.rows.toLocaleString('es') +
+             ' filas de origen tras el filtro → ' + m.units.toLocaleString('es') + ' unidades' +
+             (m.dropped ? ' · ' + m.dropped.toLocaleString('es') +
+               ' descartadas (sin ninguna de ' + m.req.join('/') + ')' : '') +
+             '</span></div><table class="fills"><tbody>');
+      cols.forEach(function(c){
+        h.push('<tr><td class="cn">' + c.n.replace('aux:', '') + '</td>' +
+               '<td class="bar-td"><div class="track"><i style="width:' +
+               Math.max(1.5, c.f * 100).toFixed(1) + '%;background:var(--contain)"></i></div></td>' +
+               '<td class="pc">' + (c.f * 100).toFixed(1) + ' %  ·  ' +
+               c.r.toLocaleString('es') + '</td></tr>');
+      });
+      h.push('</tbody></table>' +
+        (hadOpenAlex ? '<p class="note" style="margin:8px 10px 2px">También se ocultó ' +
+          '<code>openalex_abstract</code>: no es un resumen del proyecto (OpenAlex no indexa ' +
+          'proyectos, sólo publicaciones), sino el resumen de un <b>resultado declarado</b> del ' +
+          'proyecto —una publicación que produjo— recuperado de OpenAlex cuando esa publicación ' +
+          'no traía resumen propio en CRIS, Scopus ni WoS.</p>' : '') +
+        '</div>');
+    });
     box.innerHTML = h.join('');
   }
 
@@ -649,11 +687,15 @@ footer p{margin:0 0 6px;max-width:78ch}
       document.querySelectorAll('.domains button').forEach(function(o){
         o.setAttribute('aria-pressed', String(o === b)); });
       var isMethod = b.dataset.dom === '__method__';
-      document.getElementById('explorer').hidden = isMethod;
+      var isProvenance = b.dataset.dom === '__provenance__';
+      var isSpecial = isMethod || isProvenance;
+      document.getElementById('explorer').hidden = isSpecial;
       document.getElementById('method').hidden = !isMethod;
-      document.querySelector('.metrics').hidden = isMethod;
-      document.querySelector('.legend').hidden = isMethod;
+      document.getElementById('provenance').hidden = !isProvenance;
+      document.querySelector('.metrics').hidden = isSpecial;
+      document.querySelector('.legend').hidden = isSpecial;
       if (isMethod){ renderMethod(); return; }
+      if (isProvenance){ renderProvenance(); return; }
       dom = b.dataset.dom; sel = null; query=''; document.getElementById('q').value='';
       renderMetrics(); renderList(); renderDetail();
     });

@@ -1,99 +1,115 @@
-# Estado del pipeline de temas — 2026-09-23
+# Estado del pipeline de temas — 2026-09-29
 
-## Para lanzar publicaciones
+## Corridas vigentes (las que usa el atlas publicado)
+
+| | proyectos | publicaciones ligadas |
+|---|---|---|
+| run_id | `full-proj-409` | `publications_linked-308` |
+| unidades | 409 | 300 |
+| temas normalizados | 121 | 85 |
+| `PC` normalizado | 0.4426 | 0.4777 |
+
+Universo **filtrado por el mínimo declarado** (no todo lo que hay en PULSO
+entra): proyectos con `title` + `knowledge_area` + al menos una línea de
+investigación (975 → 409); publicaciones ligadas con `title` + `abstract` +
+`keywords`, y proyecto padre que también califique (1 192 → 300). Detalle
+completo del embudo y por qué se decidió así: `docs/cuantificacion_temas.md`
+§7, o la pestaña **Datos de origen** del atlas.
+
+La corrida anterior al filtro (975 proyectos / 840 publicaciones, 160 / 136
+temas: `full-proj-975` / `publications_linked-20260924-002153`) sigue intacta
+en RDS, sin tocar, por si hace falta comparar antes/después.
+
+## Cruce con Objetivos Nacionales (PEDN 2050 / CEPLAN): hecho
+
+`scripts/lib/lb_ceplan.py` + `scripts/analysis/ceplan_alignment.py`. Cada tema
+normalizado (de ambos dominios, por separado) comparado contra las 126
+sub-temáticas de `Líneas de Inv.` del PEDN 2050. Salidas en
+`salidas/topics/<dominio>/<run>/06_ceplan_alignment.json` y
+`reporte_ceplan_alignment.md`. Detalle metodológico y un hallazgo a reportar
+(la lectura fina y la gruesa discrepan ~1/3 de las veces): §8 del mismo doc.
+No integrado todavía al atlas HTML — son archivos aparte.
+
+## Cómo relanzar algo desde cero
 
 ```bash
 cd ~/LibroBlanco
-setsid nohup ./lanzar_publicaciones.sh > /dev/null 2>&1 &
-```
-
-Sobrevive al cierre de la terminal. Ver progreso en cualquier momento, desde
-cualquier sesion:
-
-```bash
-./estado.sh          # procesos, memoria, filas en RDS, avance de la extraccion
-tail -f salidas/topics/publications/ultimo.log
-```
-
-El script hace, deteniendose al primer fallo:
-0. comprobacion de infraestructura
-1. piloto de 400 publicaciones (muestra aleatoria, ~USD 3)
-2. **puerta de validacion**: PC en rango informativo, <2% de errores, 0 celdas
-   huerfanas, RAM proyectada < 900 MB. Si no pasa, NO gasta en la completa.
-3. corrida completa de 13.995 (~20 h, ~USD 97 estimados)
-
-Interrumpible con Ctrl-C o `pkill -f pipeline_temas`: la etapa 02 cachea cada
-unidad en `02_extraction_cache.jsonl`, asi que un rerun no vuelve a pagarlas.
-Reanudar con:
-
-```bash
 source config/env.sh
-python3 scripts/pipeline_temas/run_domain.py --domain publications \
-    --run-id pubs-full-13995 --from 02
+python3 scripts/pipeline_temas/run_domain.py --domain projects --run-id <nuevo>
 ```
 
-## Proyectos: TERMINADO
+Sobrevive al cierre de la terminal si se lanza con
+`setsid nohup ... > /dev/null 2>&1 &`. Progreso: `./estado.sh`,
+`tail -f salidas/topics/<dominio>/ultimo.log`.
 
-`full-proj-975`, 2026-09-23 04:48 UTC, estado `ok`.
-975 proyectos · 1.928 temas extraidos · **49 temas normalizados** ·
-7.801 celdas · PC normalizado 0,505 · 2,27 temas efectivos por proyecto ·
-**USD 5,68** · ~25 min. Salidas en `salidas/topics/projects/full-proj-975/`
-y en `s3://pulso-vri-pucp/libroblanco/runs/full-proj-975/`.
+## Cómo relanzar tras cambiar el universo (sin repagar Bedrock)
 
-## El problema de memoria: RESUELTO
+Si solo cambia QUÉ unidades entran (no su texto), reusar la extracción y los
+embeddings de una corrida anterior en vez de volver a pagarlos:
 
-Los vectores se guardaban como listas de float de Python (~33 bytes por numero).
-A escala de publicaciones eran ~1,6 GB en una maquina de 1,8 GB: moria en la
-etapa 03 **despues** de pagar las 14.000 llamadas de extraccion.
+```bash
+python3 scripts/pipeline_temas/01_prep_units.py --domain <dominio> --run-id <nuevo>
+python3 scripts/pipeline_temas/seed_from_run.py --domain <dominio> \
+    --from-run <corrida_anterior> --to-run <nuevo>
+python3 scripts/pipeline_temas/run_domain.py --domain <dominio> --run-id <nuevo> --from 03
+```
 
-Ahora son matrices `numpy` float32 de extremo a extremo (Bedrock -> agrupamiento
--> pgvector). No se pierde precision: pgvector almacena `vector` en float32, asi
-que los embeddings ya venian redondeados a esa precision desde la base.
+`seed_from_run.py` copia `extracted_topics` y `unit_embeddings` para las
+unidades que sobreviven al cambio de universo; solo se recalcula lo que
+depende del resto del corpus (agrupamiento, cuantificación).
 
-Medido a escala real (35.000 temas x 1024 dims, con la geometria de los
-embeddings reales, bajo un limite duro de 440 MB):
+## El problema de memoria: resuelto (hallazgo permanente, no cambia con las corridas)
 
-| | Antes | Ahora |
-|---|---:|---:|
-| Memoria (49k vectores) | 1.638 MB | **201 MB** |
-| RSS pico a escala completa | ~4.000 MB (proyectado) | **324 MB** (medido) |
-| Agrupamiento etapa 03 | ~13 h (proyectado) | **8,7 s** (medido) |
+Los vectores se guardaban como listas de float de Python (~33 bytes por
+número): a escala de 14 000 unidades eran ~1.6 GB en una máquina de 1.8 GB.
+Ahora son matrices `numpy` float32 de extremo a extremo (Bedrock → agrupamiento
+→ pgvector), sin pérdida de precisión (pgvector guarda `vector` en float32 de
+por sí). Medido a escala real: 1 638 MB → 201 MB, ~13 h proyectadas → 8.7 s.
 
-Se verifico que el refactor es **identico en comportamiento**: mismas
-asignaciones de grupo en 5 combinaciones de umbrales; diferencia maxima entre
-centroides 6,7e-08.
+## LibreChat: descartado como vía de ejecución (hallazgo permanente)
+
+No expone API compatible con OpenAI (`/v1/chat/completions` devuelve el HTML de
+la web) y `/api/balance` rechaza la API key con 401. La clave de la OTD es una
+API key de Bedrock (factura igual que boto3); el endpoint compatible con
+OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
+
+## Pendiente
+
+- **`datos/doi-resultados-final.csv`**: revisado, **no aporta nada nuevo al
+  universo actual**. Trae 9 371 DOIs con resumen/palabras clave, y se conectó
+  como fuente en la cascada de `scripts/addons/rebuild_linked_publications.py`
+  (paso `doi_resultados`, verificado con `--dry-run`, sin escribir nada). De
+  los 172 registros de `publications_linked` donde tiene un abstract útil,
+  **los 172 ya lo tenían** por otra fuente (master/resumen/openalex/source) —
+  se solapa por completo con enriquecimientos anteriores del mismo tipo
+  (Scopus/OpenAlex/PubMed). Sí hay ~347 abstracts recuperables en el catálogo
+  general de publicaciones (13 995, no ligadas a un proyecto), pero eso no es
+  parte del universo que se usa hoy. No hace falta volver a correr nada.
+- **CRIS**: pedido de datos diferido explícitamente por el equipo.
+- **Limpieza de disco pendiente de decisión** (nada de esto está en git, es
+  solo espacio en el servidor): `salidas/libro_blanco.db` (74 MB, DB pre-RDS),
+  `salidas/openalex_cache.jsonl` (126 MB, caché de API), ~50 MB de CSV
+  intermedios de la cadena de build legada.
+- **`docs/formulas_cuantificacion.tex`**: escrito, no compilado (sin
+  `pdflatex`/`xelatex` en este servidor). Verificar en un entorno con LaTeX
+  antes de distribuirlo.
+- Sin comenzar: benchmark Cohere vs. Titan embeddings; comparación
+  cruzada proyecto↔publicación ("¿publicaron lo que propusieron?").
 
 ## Avisos que deben acompañar cualquier informe
 
-- **37% de los proyectos (356/975)** apoyan su texto en resultados declarados:
-  para esos el tema describe lo que el proyecto **publico**, no lo que propuso.
-- **42 proyectos (4,3%)** no produjeron ningun tema extraido (solo tenian
-  titulo). Reciben tema por similitud, **sin evidencia textual detras**.
-- El export CRIS en disco es el **delgado** (`dc.description.abstract` al 8,2%
-  en origen, 0,9% tras el cruce; los que si tienen resumen son proyectos de
-  2023-2025, fuera de este universo). Pedir `ProyectosPUCPCRIS-20260814.csv`.
-- `[pricing]` lleva tarifas de **primera parte de Anthropic para Sonnet 5**
-  (USD 2/10 por millon), no las de Bedrock. Confirmar en la consola de
-  facturacion antes de publicar un costo.
-- El coste de embeddings **no esta incluido**: Bedrock no devuelve tokens
-  facturados para Cohere. Se reporta el numero de textos embebidos.
-- El modelo de embeddings (`cohere.embed-multilingual-v3`) **no esta
-  comparado** contra alternativas en este corpus. Los del registro antiguo
-  (`EXPERIMENTS.md`: jina, minilm, bge-m3...) son locales y no caben aqui.
-  Su distribucion de similitud si se midio y usa bien el rango (mediana 0,44,
-  p95 0,59), a diferencia del defecto documentado de jina-v5-nano.
+- El export CRIS en disco es delgado: `cris_abstract` 0.9% de los proyectos
+  (975), `cris_keywords` 0.1%. La mayor parte del texto de un proyecto sale de
+  `title` + líneas de investigación + resultados declarados (publicaciones que
+  produjo), no de su propia ficha CRIS.
+- `[pricing]` en `config/pipeline.toml` lleva tarifas de primera parte de
+  Anthropic para Sonnet 5, no las de Bedrock — confirmar en la consola de
+  facturación antes de publicar un costo.
+- El coste de embeddings no está incluido: Bedrock no devuelve tokens
+  facturados para Cohere. Se reporta el número de textos embebidos.
 
-## LibreChat: descartado como via de ejecucion
+## Git
 
-No expone API compatible con OpenAI (`/v1/chat/completions` devuelve el HTML de
-la web) y su `/api/balance` rechaza la API key con 401. El saldo de 20 M solo se
-gasta desde el navegador. La clave `ABSK...` de la OTD es una **API key de
-Bedrock** (cuenta 861677364255): factura igual que boto3, y el endpoint
-compatible con OpenAI de Bedrock **no sirve modelos Claude** (solo de peso
-abierto como `openai.gpt-oss-20b-1:0`). El codigo de pasarela esta construido y
-probado por si la OTD habilita un endpoint real.
-
-## Nada esta commiteado
-
-Todo el trabajo esta en el working tree (`git status`). Secretos en
-`config/env.sh` (chmod 600, gitignored, respaldo en `config/env.sh.bak`).
+Commits recientes en `main`, ya en sync con `origin/main`. Lo de esta sesión
+(CEPLAN + LaTeX + esta actualización de docs) sigue sin commitear — ver
+`git status`.

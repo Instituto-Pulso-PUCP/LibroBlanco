@@ -132,23 +132,34 @@ Complementos más intuitivos que el índice, y que se reportan junto a él:
 ## 5. Estado medido con los datos actuales
 
 Dos corridas, cada una con su propio espacio de temas (no se mezclan ni se
-comparan):
+comparan). Población tras el **universo mínimo declarado** (\S7): proyectos
+con `title` + `knowledge_area` + al menos una línea de investigación,
+publicaciones ligadas con `title` + `abstract` + `keywords` y proyecto padre
+que también califique. El detalle de por qué se llega a esta población —de
+dónde sale cada número del embudo, cuántos caracteres de texto quedó por
+unidad— está en la pestaña **Datos de origen** del atlas publicado, no
+repetido aquí.
 
-| | proyectos (`full-proj-975`) | publicaciones ligadas (`publications_linked-20260924-002153`) |
+| | proyectos (`full-proj-409`) | publicaciones ligadas (`publications_linked-308`) |
 |---|---:|---:|
-| unidades | 975 | 840 |
-| temas extraídos por el LLM | 1 928 | 1 795 |
-| temas normalizados | **160** | **136** |
-| umbrales calibrados (líder / fusión) | 0.577 / 0.636 | 0.567 / 0.641 |
-| tamaño de grupo (máx / mediana) | 77 / 8 | 96 / 9 |
-| celdas no nulas · densidad | 7 871 · 5.05 % | 6 770 · 5.93 % |
-| `PC` (normalizado) | 0.4872 (0.4839) | 0.4966 (0.4929) |
-| entropía normalizada | 0.2345 | 0.2337 |
-| temas efectivos por unidad | 2.47 | 2.40 |
-| unidades efectivas por tema | 13.3 | 13.2 |
+| unidades | 409 | 300 |
+| temas extraídos por el LLM | 1 179 | 866 |
+| temas normalizados | **121** | **85** |
+| umbrales calibrados (líder / fusión) | 0.575 / 0.643 | 0.561 / 0.635 |
+| tamaño de grupo (máx / mediana) | 64 / 7 | 42 / 7 |
+| celdas no nulas · densidad | 3 313 · 6.69 % | 2 414 · 9.47 % |
+| `PC` (normalizado) | 0.4472 (0.4426) | 0.4839 (0.4777) |
+| entropía normalizada | 0.2592 | 0.2534 |
+| temas efectivos por unidad | 2.63 | 2.40 |
+| unidades efectivas por tema | 8.3 | 8.1 |
 
 Los dos `PC` normalizados caen en la franja informativa (0.2 – 0.8): la
 partición es difusa de verdad, y las dos lecturas dicen cosas distintas.
+
+*(La corrida anterior a este filtro —975 proyectos / 840 publicaciones, 160 /
+136 temas— sigue intacta en RDS como `full-proj-975` /
+`publications_linked-20260924-002153`, por si hace falta comparar antes/después
+del filtro de calidad.)*
 
 ### Por qué no se fija un número de temas
 
@@ -157,7 +168,10 @@ umbral de fusión, calibrado sobre el p99 de las similitudes del propio corpus.
 Cada fusión que se acepta está por encima de ese umbral.
 
 Forzar un objetivo bajo obliga a aceptar fusiones por debajo del umbral. Medido
-sobre los 1 928 temas extraídos de proyectos, con umbral 0.636:
+sobre los 1 928 temas extraídos de proyectos de la corrida `full-proj-975`
+(el universo sin el filtro de calidad, más grande; el argumento es sobre la
+estructura de similitud del corpus, no cambia con el filtro), con umbral
+0.636:
 
 | objetivo | fusiones forzadas | similitud más baja aceptada | grupo mayor |
 |---:|---:|---:|---:|
@@ -190,3 +204,68 @@ separado.
 - **No tiene umbral absoluto.** Una contención de 0.30 es más alta que una de
   0.10 dentro de la misma corrida; no hay un punto de corte calibrado de
   "pertenece de verdad".
+
+## 7. Universo mínimo declarado
+
+Decisión del equipo, separada de `required_any` (que solo evita unidades sin
+texto en absoluto): una unidad puede tener texto suficiente para construirse y
+aun así no ser parte del universo si no cumple un mínimo de calidad de dato.
+
+- **Proyectos**: cerrado (`Estado = "5. Cerrado"`) y `year ≥ 2010` (ya
+  aplicado en `salidas/01_projects_closed_con_cris.csv`), **y** `title`, **y**
+  `knowledge_area`, **y** al menos una línea de investigación
+  (`research_line_1`..`4` o la homologada). De 1 928 proyectos registrados en
+  PULSO, 975 quedan cerrados/2010+, y de esos, **409** cumplen las tres.
+- **Publicaciones ligadas**: `title`, **y** `abstract`, **y** `keywords`, **y**
+  que el proyecto que la declaró como resultado también cumpla el punto
+  anterior. De 1 192 publicaciones declaradas como resultado de un proyecto
+  del universo, 308 filas cumplen las tres por su propio texto (351 sin exigir
+  el proyecto padre — la exigencia extra cuesta poco porque las publicaciones
+  tienden a venir de los proyectos mejor documentados), y tras deduplicar por
+  publicación (8 son resultado de dos proyectos a la vez) quedan **300**
+  distintas.
+
+Implementación: `lb_domains.qualifying_project_ids()` /
+`lb_domains.filter_min_requirements()`, aplicado en la etapa 01. El embudo
+completo, con la distribución de caracteres por unidad resultante, está en la
+pestaña **Datos de origen** del atlas.
+
+Al cambiar el universo se reusan, para las unidades que sobreviven, la
+extracción por LLM y el embedding de texto completo ya calculados en la
+corrida anterior (`scripts/pipeline_temas/seed_from_run.py`): son deterministas
+en función del texto, no del resto del corpus, así que no hace falta volver a
+pagarlos. Solo se recalculan la normalización (agrupamiento, que sí depende de
+qué otras unidades hay) y la cuantificación.
+
+## 8. Cruce con los Objetivos Nacionales (PEDN 2050 / CEPLAN)
+
+Encargo del equipo: introducir la matriz CEPLAN/PEDN 2050
+(`datos/PEDN2050.xlsx`) y ver dónde se clasifica mejor cada tema normalizado
+—de proyectos y de publicaciones, por separado— contra los 4 Objetivos
+Nacionales (ON).
+
+CEPLAN no pasa por el pipeline de extracción por LLM: su taxonomía (ON →
+Temática → Sub-temática, hoja `Líneas de Inv.` del libro, 126 sub-temáticas
+sobre 4 ON) ya es oficial y está nombrada por CEPLAN mismo, así que solo hace
+falta embeberla con el mismo modelo que embebió los temas
+(`cohere.embed-multilingual-v3`) para poder comparar. Implementación:
+`scripts/lib/lb_ceplan.py` (parseo) y
+`scripts/analysis/ceplan_alignment.py` (comparación + reporte).
+
+Por cada tema normalizado se reporta su mejor sub-temática (la lectura más
+específica), la Temática y el ON que implica, el score contra el centroide
+del ON directamente, y el top-3. Antes de confiar en el ranking se valida que
+los scores no estén comprimidos (ya pasó con otro modelo, en otro corpus:
+`salidas/topics/policy_alignment_model_comparison_summary.md`, ahora
+retirado) — en esta corrida el rango es 0.45–0.77, comparable al de la
+similitud interna del propio agrupamiento, así que el ranking es señal real.
+
+Un hallazgo a tener en cuenta al reportar: el ON implicado por la mejor
+sub-temática solo coincide con el ON de mayor similitud directa en 72/121
+temas de proyectos (59 %) y 58/85 de publicaciones (68 %) — las dos lecturas
+(fina y gruesa) genuinamente discrepan en cerca de un tercio de los casos; los
+reportes (`06_ceplan_alignment.json` / `reporte_ceplan_alignment.md` por
+dominio) marcan cada discrepancia en vez de resolverla en silencio.
+
+No se compara con ningún otro plan o política más allá del PEDN 2050 — eso
+sigue fuera de alcance.

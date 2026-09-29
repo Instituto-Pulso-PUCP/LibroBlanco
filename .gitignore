@@ -28,3 +28,5 @@ salidas/topics/consolidation/
 config/pipeline.toml
 config/env.sh
 config/env.sh.bak
+
+datos/

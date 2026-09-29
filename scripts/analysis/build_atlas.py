@@ -195,9 +195,16 @@ def collect(cfg, domain: str, run_id: str) -> dict:
 
 
 def coverage(domain: str) -> dict:
-    """Tasas de llenado de las columnas embebidas, para la pestaña de metodología."""
+    """Tasas de llenado de las columnas embebidas, para la pestaña de metodología.
+
+    Se calcula sobre la poblacion YA filtrada por el universo minimo
+    declarado (lb_domains.filter_min_requirements): antes de que ese filtro
+    existiera esto se calculaba sobre TODAS las filas del CSV de origen, asi
+    que las tasas de llenado mostradas no correspondian a la corrida real.
+    """
     spec = lb_domains.get(domain)
-    rows = lb_domains.read_source(spec)
+    raw_rows = lb_domains.read_source(spec)
+    rows, dropped_min_req = lb_domains.filter_min_requirements(spec, raw_rows)
     units, dropped = lb_domains.to_units(spec, rows, 6000)
     report = lb_coverage.build(spec, rows, units, dropped)
     cols = [{"n": c["column_name"], "f": round(c["fill_rate"], 4),
@@ -206,7 +213,58 @@ def coverage(domain: str) -> dict:
     cols.sort(key=lambda c: -c["f"])
     return {"src": spec.source_csv.name, "rows": report["rows_in_source"],
             "units": report["units_built"], "dropped": report["units_dropped"],
-            "chars": report["text_chars"], "cols": cols, "req": spec.required_any}
+            "chars": report["text_chars"], "cols": cols, "req": spec.required_any,
+            "raw_rows": len(raw_rows), "dropped_min_req": dropped_min_req,
+            "provenance": provenance_notes(domain)}
+
+
+def provenance_notes(domain: str) -> dict:
+    """El embudo completo hasta la poblacion final: de donde salen los datos
+    y por que se quedo tan poca. Numeros escritos a mano porque cada paso
+    viene de un archivo/decision distinta que no se puede derivar solo del
+    CSV de origen del dominio (ver conversacion del equipo)."""
+    if domain == "projects":
+        return {
+            "steps": [
+                {"n": 1928, "label": "Proyectos registrados en PULSO/CRIS",
+                 "note": "hoja PROYECTOS de datos/informacion_proyecto_pulso.xlsx"},
+                {"n": 975, "label": "Cerrados (Estado = \"5. Cerrado\") y de 2010 en adelante",
+                 "note": "filtro fijo del equipo: solo proyectos concluidos, en la ventana "
+                         "temporal declarada"},
+                {"n": 409, "label": "Cumplen el universo mínimo declarado",
+                 "note": "title + área de conocimiento + al menos una línea de investigación, "
+                         "las tres. Decisión del equipo: un proyecto con solo título no da "
+                         "suficiente señal para un análisis semántico serio."},
+            ],
+            "why": "Se probaron dos versiones antes de fijar esta: exigir título + línea de "
+                   "investigación (cualquiera de las dos, sin exigir área de conocimiento) "
+                   "dejaba 493; exigir las tres a la vez, como se hace aquí, deja 409. La "
+                   "diferencia es chica porque en este registro casi todo proyecto con área "
+                   "de conocimiento también tiene línea de investigación (se solapan), así "
+                   "que la exigencia extra no penaliza dos veces lo mismo.",
+        }
+    if domain == "publications_linked":
+        return {
+            "steps": [
+                {"n": 1192, "label": "Publicaciones declaradas como resultado de un proyecto "
+                                     "del universo",
+                 "note": "salidas/07_publications_linked_full.csv"},
+                {"n": 308, "label": "Cumplen título + resumen + palabras clave, y su proyecto "
+                                    "padre también califica",
+                 "note": "mismo criterio de calidad que projects, extendido: no tiene sentido "
+                         "declarar \"nuestros proyectos calificados\" y contar publicaciones "
+                         "de un proyecto que no calificaría."},
+                {"n": 300, "label": "Publicaciones distintas tras deduplicar",
+                 "note": "8 publicaciones son resultado declarado de DOS proyectos a la vez "
+                         "(comparten publication_id con project_id distinto); cuentan una "
+                         "sola vez."},
+            ],
+            "why": "De las 308 filas que pasan el filtro por su propio texto, 351 pasarían "
+                   "sin exigir que el proyecto padre también califique -- la exigencia extra "
+                   "cuesta poco (43 filas) porque las publicaciones tienden a venir "
+                   "precisamente de los proyectos mejor documentados.",
+        }
+    return {"steps": [], "why": ""}
 
 
 def main():

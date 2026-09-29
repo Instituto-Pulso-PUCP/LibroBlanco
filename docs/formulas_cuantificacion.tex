@@ -1,0 +1,237 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage[margin=2.7cm]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\newcommand{\afinidad}{w}
+
+\title{Cuantificación bidireccional de temas en proyectos y publicaciones\\
+\large Fórmulas, procedencia y ejemplo trabajado}
+\author{Instituto Pulso PUCP --- Libro Blanco}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Planteamiento}
+
+Cada proyecto o publicación (una \emph{unidad} $u$) trata de varios temas a la
+vez, en distinto grado. El equipo pidió responder dos preguntas distintas
+para el mismo par (unidad, tema):
+
+\begin{enumerate}
+  \item \textbf{¿Cuánto de la unidad es este tema?} --- si miro solo este
+    proyecto, qué fracción de lo que hace corresponde a este tema.
+  \item \textbf{¿Cuánto del tema aporta la unidad?} --- si miro solo este
+    tema, qué fracción de todo lo que lo compone viene de este proyecto.
+  \end{enumerate}
+
+Estas dos preguntas casi nunca tienen la misma respuesta numérica, y la
+diferencia depende únicamente del tamaño del tema (\S\ref{sec:ejemplo}). No
+existe una etiqueta corta y estándar para este par de lecturas --- se nombran
+aquí por la pregunta que responden en vez de inventar un término que se
+prestaría a confusión --- pero las matemáticas de abajo sí son estándar
+(\S\ref{sec:procedencia}).
+
+\section{La matriz de afinidad}
+
+Todo parte de una matriz de afinidad $\afinidad[u,t] \geq 0$: cuánta
+evidencia hay de que la unidad $u$ trata del tema $t$. Se construye
+mezclando dos fuentes, cada una normalizada a que su fila sume 1 antes de
+mezclarlas:
+
+\begin{itemize}
+  \item \textbf{Extracción por LLM} (peso $\alpha = 0.7$ por defecto): un LLM
+    lee el texto de la unidad y devuelve de 1 a 5 temas, cada uno con una
+    cita literal verificada contra el texto y una confianza en $[0,1]$. Si
+    varios temas extraídos de la misma unidad caen, al normalizar, dentro
+    del mismo tema normalizado, sus confianzas se suman.
+  \item \textbf{Similitud de embeddings} (peso $1-\alpha = 0.3$): coseno entre
+    el embedding del texto completo de la unidad y el centroide de cada
+    tema (la media de los embeddings de los temas extraídos que ese
+    agrupamiento reunió). Se recorta antes de usarla --- descartar lo que no
+    supera un piso de 0.30, quedarse con los $k=8$ temas más cercanos y
+    elevar a una potencia $p=3$ --- porque en este corpus el coseno entre dos
+    textos \emph{no} relacionados ronda 0.45, no 0: sin el recorte, toda
+    unidad se repartiría casi por igual entre todos los temas y el
+    coeficiente de partición (\S\ref{sec:particion}) caería a su mínimo.
+\end{itemize}
+
+Solo la primera fuente tiene evidencia textual directa detrás; la segunda es
+proximidad semántica del texto completo, no algo que el LLM haya afirmado de
+esa unidad en particular. Sin la segunda, con solo 2--4 temas extraídos por
+unidad, la partición resultante es casi nítida en vez de difusa: cada unidad
+cae en un tema casi al 100\,\% y la segunda pregunta pierde sentido (ver la
+corrida \texttt{legacy-49} en \texttt{docs/cuantificacion\_temas.md}).
+
+\section{Las dos fórmulas}
+
+\begin{equation}
+  C[u,t] \;=\; \frac{\afinidad[u,t]}{\displaystyle\sum_{t'} \afinidad[u,t']}
+  \qquad\text{(``cuánto de la unidad es este tema'', } = P(t \mid u) \text{)}
+\end{equation}
+
+\noindent
+Se fija la unidad $u$ y se suma $\afinidad$ sobre \emph{todos los temas}: el
+total de la fila de esa unidad. Todas las $C[u,\cdot]$ de una misma unidad
+suman 1.
+
+\begin{equation}
+  E[t] \;=\; \sum_{u} C[u,t]
+  \label{eq:E}
+\end{equation}
+
+\noindent
+El tamaño del tema en \emph{unidades-equivalentes}: se fija el tema $t$ y se
+suma $C$ sobre \emph{todas las unidades} --- el total de la columna. Como
+$\sum_u C[u,t] $ ya reparte 100\,\% de cada unidad entre sus temas,
+$\sum_t E[t] = N$ (el total de unidades): los tamaños de los temas se pueden
+sumar sin doble conteo.
+
+\begin{equation}
+  K[u,t] \;=\; \frac{C[u,t]}{E[t]}
+  \qquad\text{(``cuánto del tema aporta la unidad'', } = P(u \mid t) \text{)}
+\end{equation}
+
+\noindent
+Se divide la misma celda $C[u,t]$ entre el tamaño de su columna. Todas las
+$K[\cdot,t]$ de un mismo tema suman 1.
+
+\paragraph{Las dos fórmulas comparten la celda $C[u,t]$.} Lo único que
+cambia es la dirección de la suma en el denominador: por fila (a través de
+temas, para esta unidad) en la primera, por columna (a través de unidades,
+para este tema) en la segunda. $E[t]$ es, de hecho, esa suma por columna, y
+es el puente entre las dos: dividir por $E[t]$ es la regla de Bayes escrita
+al revés --- la segunda lectura es la primera corregida por lo grande que sea
+el tema.
+
+\section{Complementos: cuántos cuentan de verdad}
+
+\begin{equation}
+  \text{temas efectivos de } u \;=\; \frac{1}{\sum_t C[u,t]^2}
+  \qquad\qquad
+  \text{unidades efectivas de } t \;=\; \frac{1}{\sum_u K[u,t]^2}
+\end{equation}
+
+\noindent
+El \emph{número efectivo} $1/\sum p^2$ dice cuántas piezas, si todas
+pesaran igual, producirían la misma concentración que la distribución real.
+Si diez proyectos aportan 10\,\% cada uno, salen 10 efectivos; si uno aporta
+90\,\% y los otros nueve 1.1\,\% cada uno, sale 1.2: dice cuántos cuentan de
+verdad, no cuántos hay.
+
+\subsection{Coeficiente de partición}
+\label{sec:particion}
+
+\begin{equation}
+  PC \;=\; \frac{1}{N}\sum_{u}\sum_{t} C[u,t]^2
+  \qquad\qquad
+  PC_{\text{norm}} \;=\; \frac{PC - 1/T}{1 - 1/T}
+\end{equation}
+
+\noindent
+$PC$ vale 1 si cada unidad cae en un único tema (partición nítida) y $1/T$
+si se reparte por igual entre los $T$ temas (partición uniforme, sin
+información). $PC$ crudo depende del número de temas $T$ --- un 0.45 con 49
+temas y un 0.45 con 121 no significan lo mismo --- por eso se reporta
+$PC_{\text{norm}}$ (normalización de Dunn/Backer), comparable entre corridas
+con distinto $T$.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+$PC_{\text{norm}}$ & Interpretación & \\
+\midrule
+$> 0.95$ & partición prácticamente nítida & la contención no aporta nada sobre una asignación simple \\
+$0.2$ -- $0.8$ & rango informativo & reportar \\
+$< 0.05$ & prácticamente uniforme & revisar el recorte de la similitud \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Ejemplo trabajado}
+\label{sec:ejemplo}
+
+Proyecto 767, \emph{``Stabilizability with Markov Parameters Partially
+Known and Metrics of...''}, tema \emph{``Estabilidad estocástica de sistemas
+singulares con saltos markovianos''}, corrida \texttt{full-proj-409}.
+
+\paragraph{Paso 1 --- la fila de afinidades de esta unidad (las 8 con valor):}
+\[
+  0.8876,\; 0.0278,\; 0.0205,\; 0.0179,\; 0.0124,\; 0.0120,\; 0.0115,\; 0.0103
+  \qquad \sum = 1.0000
+\]
+
+\paragraph{Paso 2 --- contención:}
+\[
+  C[u,t] = \frac{0.8876}{1.0000} = 0.8876 \;\to\; 88.8\,\%
+\]
+El 88.8\,\% de lo que trata este proyecto es este tema.
+
+\paragraph{Paso 3 --- tamaño del tema:} sumando esa misma columna sobre las
+409 unidades del dominio, el tema recibe fracciones de 17 proyectos
+distintos y acumula
+\[
+  E[t] = 4.48 \text{ unidades-equivalentes.}
+\]
+Vale 4.48 proyectos enteros, aunque lo rocen 17.
+
+\paragraph{Paso 4 --- contribución:}
+\[
+  K[u,t] = \frac{C[u,t]}{E[t]} = \frac{0.8876}{4.48} = 0.1982 \;\to\; 19.8\,\%
+\]
+Este proyecto es, él solo, el 19.8\,\% de todo el tema.
+
+\medskip
+\noindent
+El mismo $\afinidad[u,t]=0.8876$ produce 88.8\,\% o 19.8\,\% según contra
+qué total se mida: la fila del proyecto, o la columna del tema. Si el tema
+fuera del tamaño del tema más grande de esta corrida (20.3
+unidades-equivalentes, sostenido por 107 proyectos), la misma contención del
+88.8\,\% se traduciría en apenas un 4.4\,\% de contribución --- por eso las
+dos preguntas hacen falta por separado: preguntar ``¿cuánto pesa esta unidad
+en este tema?'' sin decir en qué dirección no tiene una sola respuesta.
+
+\section{De dónde sale esto}
+\label{sec:procedencia}
+
+\begin{itemize}
+  \item \textbf{La matriz de pertenencia difusa.} Que una unidad pertenezca
+    a varios temas a la vez, en grados que suman 1, es una \emph{partición
+    difusa}: el objeto central del agrupamiento difuso (\emph{fuzzy
+    c-means}, Bezdek, 1981). De ahí viene también el coeficiente de
+    partición que sugirió el profesor, que no es el número por celda sino
+    un índice de validez del conjunto completo.
+  \item \textbf{Las dos direcciones.} Son probabilidad condicionada
+    elemental sobre una distribución conjunta $P(u,t) \propto \afinidad[u,t]$,
+    unidas por la regla de Bayes. $P(t\mid u)$ es, además, lo mismo que
+    devuelve un modelo de tópicos tipo LDA como distribución
+    tema-documento; la novedad aquí no es esa mitad, sino publicar también
+    la otra.
+  \item \textbf{Las unidades-equivalentes.} Son \emph{conteo fraccionado}
+    (\emph{fractional counting}), la práctica estándar en bibliometría para
+    repartir el crédito de una publicación entre sus autores o
+    instituciones en vez de contarla entera para cada uno. Aquí se reparte
+    entre temas en vez de entre autores.
+  \item \textbf{El número efectivo} $1/\sum p^2$ se reinventa en todas
+    partes con el mismo nombre distinto: inverso del índice de Simpson en
+    ecología, inverso del índice de Herfindahl--Hirschman en economía de la
+    competencia, ``número efectivo de partidos'' en ciencia política.
+\end{itemize}
+
+\section{Reproducibilidad}
+
+Todas las cifras de este documento salen de la corrida \texttt{full-proj-409}
+del dominio \texttt{projects} (409 proyectos, filtrados por universo mínimo
+declarado: cerrado y 2010+, con \texttt{title}, \texttt{knowledge\_area} y al
+menos una línea de investigación). Fórmulas implementadas en
+\texttt{scripts/lib/lb\_membership.py}; corren sobre Amazon Bedrock
+(\texttt{Claude Sonnet 5} para extracción y nombrado,
+\texttt{cohere.embed-multilingual-v3} para embeddings) y se guardan en
+PostgreSQL con \texttt{pgvector} en Amazon RDS. El explorador interactivo de
+esta misma corrida está en el atlas temático publicado por el equipo.
+
+\end{document}

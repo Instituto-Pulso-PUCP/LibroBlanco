@@ -9,11 +9,18 @@ estaban en disco.
 
 Cascada de procedencia (se para en la primera que da texto util, >80 chars):
 
-  1. master        `03_publications_master.csv` (texto ya depurado)
-  2. resumen       `07_..._ground_truth.csv`, resumen humano por DOI
-  3. openalex      idem, reconstruido del abstract_inverted_index
-  4. source        idem, abstract de la fuente original (WoS/RI)
-  5. vri_dfi       `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
+  1. master          `03_publications_master.csv` (texto ya depurado)
+  2. doi_resultados  `datos/doi-resultados-final.csv`, cruzado por DOI
+                     (9 371 DOIs con resumen/palabras clave de Scopus/
+                     OpenAlex/PubMed; llegó despues del resto de las fuentes,
+                     asi que no estaba disponible cuando se armaron)
+  3. resumen         `07_..._ground_truth.csv`, resumen humano por DOI
+  4. openalex        idem, reconstruido del abstract_inverted_index
+  5. source          idem, abstract de la fuente original (WoS/RI)
+  6. vri_dfi         `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
+
+Las palabras clave tambien se completan desde doi-resultados-final.csv cuando
+faltan en master/ground-truth.
 
 Anade la columna `abstract_source` con la procedencia, para poder auditar
 despues de donde salio cada texto. Sin dependencias externas: solo stdlib
@@ -40,6 +47,7 @@ import lb_domains  # noqa: E402
 GT = ROOT / "salidas" / "07_project_publication_ground_truth.csv"
 MASTER = ROOT / "salidas" / "03_publications_master.csv"
 VRI = ROOT / "datos" / "Publicaciones - VRI-DFI 20260721.csv"
+DOI_RESULTADOS = ROOT / "datos" / "doi-resultados-final.csv"
 OUT = ROOT / "salidas" / "07_publications_linked_full.csv"
 
 MIN_CHARS = 80   # por debajo de esto no es un abstract, es un resto
@@ -63,6 +71,25 @@ def read_csv(path: Path) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
+def norm_doi(value) -> str:
+    text = lb_domains.clean_value(value).lower()
+    for prefix in ("https://doi.org/", "http://doi.org/", "doi:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    return text
+
+
+def load_doi_resultados() -> dict[str, dict]:
+    if not DOI_RESULTADOS.exists():
+        return {}
+    out = {}
+    for row in read_csv(DOI_RESULTADOS):
+        doi = norm_doi(row.get("doi"))
+        if doi:
+            out[doi] = row
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
@@ -71,6 +98,9 @@ def main():
 
     ground = read_csv(GT)
     master = {r["publication_id"]: r for r in read_csv(MASTER)}
+    doi_resultados = load_doi_resultados()
+    print(f"doi-resultados-final.csv: {len(doi_resultados):,} DOIs cargados"
+          if doi_resultados else "doi-resultados-final.csv no encontrado; se omite ese paso.")
     vri = {}
     if VRI.exists():
         for row in read_csv(VRI):
@@ -98,10 +128,14 @@ def main():
             journal = lb_domains.clean_value(record.get("journal_raw"))
             row_id = f"gt_{record.get('project_id','')}_{record.get('cod_prod','')}"
 
+        doi = norm_doi(record.get("doi_norm")) or norm_doi(matched.get("doi") if matched else "")
+        doi_hit = doi_resultados.get(doi, {})
+
         # La cascada: el fallo original era pararse en el primer paso.
         abstract, source = "", ""
         for candidate, label in (
             (matched.get("abstract") if matched else "", "master"),
+            (doi_hit.get("resumen"), "doi_resultados"),
             (record.get("resumen"), "resumen"),
             (record.get("openalex_abstract"), "openalex"),
             (record.get("source_abstract"), "source"),
@@ -111,6 +145,9 @@ def main():
             if text:
                 abstract, source = text, label
                 break
+
+        if not keywords:
+            keywords = lb_domains.clean_value(doi_hit.get("palabras_clave"))
 
         provenance[source or "sin_abstract"] += 1
         rows.append({

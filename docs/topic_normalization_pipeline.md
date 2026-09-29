@@ -8,12 +8,17 @@
 > [infraestructura_aws.md](infraestructura_aws.md). Tres cambios respecto de lo
 > que se describe aquí:
 >
-> 1. **El contraste con planes/políticas queda pausado.** La sección
->    "Contraste con un objetivo" de más abajo sigue siendo válida como registro
->    de lo que se hizo y por qué, pero **no forma parte del flujo actual**. Los
->    scripts (`build_topic_policy_alignment.py`, `cluster_ceplan_policies.py`,
->    `build_policy_alignment_explorer.py`, `consolidate_publications_into_49.py`)
->    se conservan sin cambios para poder retomarlo.
+> 1. **El contraste con planes/políticas en general queda pausado.** La
+>    sección "Contraste con un objetivo" de más abajo sigue siendo válida como
+>    registro de lo que se hizo y por qué, pero **no forma parte del flujo
+>    actual**. Los scripts (`build_topic_policy_alignment.py`,
+>    `cluster_ceplan_policies.py`, `build_policy_alignment_explorer.py`,
+>    `consolidate_publications_into_49.py`) se conservan sin cambios para poder
+>    retomarlo. **Excepción puntual (2026-09-29)**: sí se cruzó contra el PEDN
+>    2050 / Objetivos Nacionales de CEPLAN, por encargo explícito — ver
+>    `cuantificacion_temas.md` §8. Es un cruce acotado a ese documento, no una
+>    reapertura del contraste amplio con el catálogo de políticas de 946
+>    documentos que describe esta sección.
 > 2. **Proyectos y publicaciones tienen espacios de temas separados.** No se
 >    normalizan juntos ni se mapean los temas de publicaciones contra los 49 de
 >    proyectos. `consolidate_publications_into_49.py` pertenece al flujo pausado
