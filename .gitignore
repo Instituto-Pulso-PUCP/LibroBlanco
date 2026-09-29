@@ -3,9 +3,6 @@
 *.json
 .env
 .env.*
-LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/salidas/00_ground_truth_metrics_slide.md
-/LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/tests/__pycache__
-/LibroBlanco_Pulso_pipeline_v1/LibroBlanco_Pulso/scripts/__pycache__
 *.pyc
 scripts/**/__pycache__
 *.jsonl
@@ -13,3 +10,21 @@ scripts/**/__pycache__
 
 # Generated colored XLSX outputs (input data lives in datos/ and is not ignored)
 salidas/*.xlsx
+
+# Salidas del pipeline de temas: se regeneran corriendo la etapa correspondiente
+# (los datos de verdad viven en RDS/S3), o el atlas con
+# scripts/analysis/build_atlas.py. No tiene sentido versionar algo que cambia
+# en cada corrida y no es fuente de nada.
+salidas/topics/*/*/
+salidas/topics/atlas.html
+salidas/00_ground_truth_metrics_slide.md
+
+# Consolidacion manual de CEPLAN/temas del pipeline legado (pre-RDS): se deja
+# en el servidor por su valor de referencia, pero no es codigo ni se regenera
+# corriendo nada, asi que no aporta versionarlo en git.
+salidas/topics/consolidation/
+
+# Configuracion local del pipeline (endpoints y credenciales)
+config/pipeline.toml
+config/env.sh
+config/env.sh.bak

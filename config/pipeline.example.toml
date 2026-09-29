@@ -1,0 +1,162 @@
+# Configuracion del pipeline de temas (LibroBlanco / Pulso).
+#
+# Copiar a config/pipeline.toml y rellenar los valores marcados RELLENAR.
+# config/pipeline.toml esta en .gitignore: NO se versiona (trae endpoints y,
+# si se usa, la contrasena de RDS).
+#
+# Cualquier valor puede sobrescribirse por variable de entorno con el prefijo
+# LB_ y la ruta en mayusculas separada por "__":
+#   LB_RDS__HOST=...  LB_BEDROCK__EMBEDDING_MODEL_ID=...
+# En produccion es preferible NO poner la contrasena aqui y usar
+# rds.auth = "iam" (token efimero) o rds.password_secret_arn (Secrets Manager).
+
+[run]
+# Etiqueta del run; se usa como prefijo en S3 y como clave en la tabla de uso.
+# "auto" genera <domain>-<YYYYmmdd-HHMMSS>.
+run_id = "auto"
+# Donde persisten los resultados: "rds" (produccion) | "local" (ficheros JSON
+# en salidas/, para probar el flujo sin infraestructura).
+store = "local"
+# Subir artefactos intermedios y finales a S3.
+use_s3 = false
+
+[aws]
+region = "us-east-1"
+# Perfil de ~/.aws/credentials. Vacio = cadena por defecto (rol de instancia).
+profile = ""
+
+# ---------------------------------------------------------------------------
+# RDS (PostgreSQL). Ver sql/schema.sql para el esquema que espera el pipeline.
+# ---------------------------------------------------------------------------
+[rds]
+profile = ""                      # perfil para el token IAM / Secrets Manager
+host = "RELLENAR"                 # p.ej. pulso-db.xxxxx.us-east-1.rds.amazonaws.com
+port = 5432
+database = "RELLENAR"             # p.ej. libroblanco
+user = "RELLENAR"                 # p.ej. pulso_app
+# "password" = contrasena en password/password_secret_arn
+# "iam"      = token IAM efimero (recomendado; no hay contrasena que rotar)
+auth = "iam"
+password = ""                     # solo si auth = "password" y no hay secreto
+password_secret_arn = ""          # RELLENAR si auth = "password" via Secrets Manager
+sslmode = "require"
+schema = "libroblanco"
+# Guardar los vectores en la BD con pgvector en vez de en S3/npy.
+# Requiere: CREATE EXTENSION vector; en la instancia.
+use_pgvector = true
+
+# ---------------------------------------------------------------------------
+# S3: datos crudos, vectores y artefactos de cada run.
+# ---------------------------------------------------------------------------
+[s3]
+bucket = "RELLENAR"               # p.ej. pulso-libroblanco
+# Perfil de ~/.aws/credentials propio de S3, si usa un par de claves distinto
+# al de Bedrock. Vacio = hereda aws.profile.
+profile = ""
+prefix = "libroblanco"            # raiz dentro del bucket
+raw_prefix = "raw"                # datos de origen (xlsx/csv) tal cual llegan
+artifacts_prefix = "runs"         # salidas por run: runs/<run_id>/...
+embeddings_prefix = "embeddings"  # vectores si use_pgvector = false
+
+# ---------------------------------------------------------------------------
+# Bedrock: embeddings + extraccion/normalizacion de temas con LLM.
+# ---------------------------------------------------------------------------
+[bedrock]
+region = "us-east-1"              # puede diferir de aws.region segun disponibilidad
+profile = ""                      # perfil propio de Bedrock; vacio = aws.profile
+# Modelo de embeddings. Debe soportar espanol (el corpus es mayormente ES).
+# Candidatos: cohere.embed-multilingual-v3 (1024d, multilingue, el indicado
+# para este corpus) | amazon.titan-embed-text-v2:0 (1024d, mejor en ingles).
+embedding_model_id = "cohere.embed-multilingual-v3"
+# Limite duro de Cohere: 2048 caracteres por texto. Los textos mas largos
+# se trocean y se promedian sus vectores, no se truncan.
+embedding_max_chars = 2048
+embedding_dimensions = 1024
+embedding_batch_size = 96         # limite de cohere.embed; Titan solo acepta 1
+# Modelo de extraccion/normalizacion de temas.
+llm_model_id = "RELLENAR"         # p.ej. anthropic.claude-opus-5
+llm_max_tokens = 2048
+# temperature esta ELIMINADO en Opus 5 / Sonnet 5 (devuelve 400).
+# Dejar vacio salvo modelos antiguos (Haiku 4.5) que si lo aceptan.
+temperature = ""
+# Profundidad de razonamiento: low | medium | high | xhigh | max.
+# Es la palanca de costo principal. "low" es adecuado para una
+# extraccion estructurada y bien especificada como la etapa 02.
+effort = "low"
+# Reintentos ante throttling (Bedrock devuelve ThrottlingException bajo carga).
+max_retries = 8
+retry_base_delay = 1.0
+# Concurrencia de llamadas. Subir solo tras revisar la cuota de la cuenta.
+max_concurrency = 4
+
+# ---------------------------------------------------------------------------
+# Pasarela compatible con OpenAI (LibreChat, LiteLLM, Bedrock Access Gateway).
+# Se usa cuando el acceso a Bedrock llega como OPENAI_BASE_URL + API key en vez
+# de como par de claves AWS. Por detras puede seguir siendo Bedrock.
+# use_for: "chat" | "embeddings" | "both" | "none"
+#   Lo que la pasarela NO cubra se pide a Bedrock por boto3.
+# ---------------------------------------------------------------------------
+[gateway]
+enabled = false
+base_url = "RELLENAR"             # el OPENAI_BASE_URL, sin el /v1 final
+api_key = ""                      # NO ponerla aqui: usar LB_GATEWAY__API_KEY
+chat_model = "RELLENAR"           # nombre del modelo tal como lo expone la pasarela
+embedding_model = "RELLENAR"      # idem, para /v1/embeddings
+embedding_batch_size = 96
+use_for = "both"
+
+# ---------------------------------------------------------------------------
+# Precios por millon de tokens, para el reporte de costo. RELLENAR con los
+# precios vigentes de la region: el reporte no sirve si estos no se actualizan.
+# Ver https://aws.amazon.com/bedrock/pricing/
+# ---------------------------------------------------------------------------
+[pricing]
+llm_input_per_mtok = 0.0          # RELLENAR (USD por 1M tokens de entrada)
+llm_output_per_mtok = 0.0         # RELLENAR (USD por 1M tokens de salida)
+embedding_per_mtok = 0.0          # RELLENAR (USD por 1M tokens embebidos)
+s3_storage_per_gb_month = 0.023
+s3_put_per_1k = 0.005
+s3_get_per_1k = 0.0004
+rds_per_hour = 0.0                # RELLENAR (costo por hora de la instancia)
+compute_per_hour = 0.0            # RELLENAR (costo por hora de este servidor EC2)
+
+# ---------------------------------------------------------------------------
+# Extraccion y normalizacion de temas.
+# ---------------------------------------------------------------------------
+[topics]
+# Temas a extraer por unidad. El LLM puede devolver menos si no hay material.
+max_topics_per_unit = 5
+min_confidence = 0.5
+# Numero objetivo de temas normalizados.
+#   0 (o negativo) = SIN objetivo: el numero lo decide el umbral de fusion
+#     calibrado sobre el propio corpus (p99 de sus similitudes). Es el modo
+#     honesto: ninguna fusion se acepta por debajo del umbral.
+#   n > 0 = forzar n temas. Cada fusion que falte para llegar a n se acepta
+#     aunque su similitud este por debajo del umbral, asi que conviene mirar
+#     el diagnostico de la etapa 03 antes de usarlo.
+# Se fija POR DOMINIO: proyectos y publicaciones NO comparten espacio de temas.
+target_topics = 0
+# Caracteres de texto de la unidad enviados al LLM (control de costo).
+max_text_chars = 6000
+
+# ---------------------------------------------------------------------------
+# Cuantificacion bidireccional (ver docs/cuantificacion_temas.md).
+# ---------------------------------------------------------------------------
+[quantification]
+# De donde sale el peso de cada celda (unidad, tema):
+#   "extraction" = masa de confianza del LLM (dispersa, con evidencia)
+#   "embedding"  = similitud coseno unidad <-> centroide del tema (densa)
+#   "hybrid"     = mezcla de ambas (por defecto)
+affinity_source = "hybrid"
+# Peso de la extraccion en el hibrido (el resto va a la similitud).
+hybrid_alpha = 0.7
+# Recorte de la similitud antes de normalizar. Sin esto la contencion tiende a
+# 1/T para toda unidad y el coeficiente de particion se va a su minimo.
+similarity_top_k = 8
+similarity_floor = 0.30
+similarity_power = 3.0
+# "share" = cada unidad aporta 1 unidad-equivalente repartida entre sus temas
+# "mass"  = las unidades con mas masa de afinidad aportan proporcionalmente mas
+contribution_mode = "share"
+# Celdas por debajo de esta contencion no se guardan (ruido de cola larga).
+min_containment = 0.01

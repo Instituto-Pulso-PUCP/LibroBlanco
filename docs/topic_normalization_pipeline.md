@@ -1,5 +1,29 @@
 # Pipeline de extracción y normalización temática
 
+> **Estado (2026-09-23): este documento describe el pipeline anterior.**
+>
+> El flujo vigente está en
+> [`scripts/pipeline_temas/`](../scripts/pipeline_temas/) y documentado en
+> [cuantificacion_temas.md](cuantificacion_temas.md) e
+> [infraestructura_aws.md](infraestructura_aws.md). Tres cambios respecto de lo
+> que se describe aquí:
+>
+> 1. **El contraste con planes/políticas queda pausado.** La sección
+>    "Contraste con un objetivo" de más abajo sigue siendo válida como registro
+>    de lo que se hizo y por qué, pero **no forma parte del flujo actual**. Los
+>    scripts (`build_topic_policy_alignment.py`, `cluster_ceplan_policies.py`,
+>    `build_policy_alignment_explorer.py`, `consolidate_publications_into_49.py`)
+>    se conservan sin cambios para poder retomarlo.
+> 2. **Proyectos y publicaciones tienen espacios de temas separados.** No se
+>    normalizan juntos ni se mapean los temas de publicaciones contra los 49 de
+>    proyectos. `consolidate_publications_into_49.py` pertenece al flujo pausado
+>    por ese motivo.
+> 3. **El paso manual/asistido de extracción se automatiza con Bedrock**, y el
+>    resultado se cuantifica en las dos direcciones (contención y contribución)
+>    en vez de quedarse en la lista de temas por unidad.
+
+---
+
 Replica, para los proyectos de investigación de la PUCP, la metodología usada
 en un explorador de referencia (`explorador_temas.html`, aportado por el
 equipo) sobre otro documento: por cada unidad de texto se extraen temas con

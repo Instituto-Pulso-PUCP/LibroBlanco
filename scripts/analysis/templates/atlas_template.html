@@ -1,0 +1,674 @@
+<title>Atlas Temático PUCP</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f6f5f2; --surface:#fffefc; --surface-2:#eeece7; --line:#dcd8d0;
+  --ink:#1c1e22; --ink-2:#55595f; --ink-3:#8a8d93;
+  /* Las dos direcciones de la misma celda. Es la idea de la pagina: */
+  --contain:#0d6b6b;  --contain-soft:#0d6b6b26;   /* cuanto de la unidad es el tema */
+  --contrib:#a9630c;  --contrib-soft:#a9630c26;   /* cuanto del tema aporta la unidad */
+  --focus:#0d6b6b;
+}
+/* Forma plana, no anidada: el anidamiento CSS falla en silencio en motores
+   antiguos y ahi el modo oscuro se quedaria sin definir. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#131519; --surface:#1a1d22; --surface-2:#22262c; --line:#31363d;
+    --ink:#eceae6; --ink-2:#a7abb2; --ink-3:#757a82;
+    --contain:#4bbdb3; --contain-soft:#4bbdb333;
+    --contrib:#e0a355; --contrib-soft:#e0a35533;
+    --focus:#4bbdb3;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#131519; --surface:#1a1d22; --surface-2:#22262c; --line:#31363d;
+  --ink:#eceae6; --ink-2:#a7abb2; --ink-3:#757a82;
+  --contain:#4bbdb3; --contain-soft:#4bbdb333;
+  --contrib:#e0a355; --contrib-soft:#e0a35533;
+  --focus:#4bbdb3;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:28px 56px}
+h1{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(28px,4.4vw,42px);
+  line-height:1.1;margin:0 0 6px;text-wrap:balance;letter-spacing:-.015em}
+.sub{color:var(--ink-2);max-width:62ch;margin:0 0 22px;font-size:15.5px}
+.eyebrow{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;margin:0 0 10px}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* --- selector de dominio --- */
+.domains{display:flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;
+  background:var(--surface);width:fit-content;max-width:100%;flex-wrap:wrap;margin-bottom:22px}
+.domains button{appearance:none;border:0;background:transparent;color:var(--ink-2);cursor:pointer;
+  font:inherit;font-weight:500;padding:9px 18px;border-right:1px solid var(--line)}
+.domains button:last-child{border-right:0}
+.domains button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+.domains button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+
+/* --- metricas --- */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:26px}
+.metric{background:var(--surface);padding:13px 15px}
+.metric dt{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;margin:0 0 3px}
+.metric dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:21px;font-variant-numeric:tabular-nums}
+.metric .note{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+
+/* --- leyenda de direcciones --- */
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-bottom:26px}
+.dir{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  border-left:3px solid var(--c)}
+.dir.contain{--c:var(--contain)} .dir.contrib{--c:var(--contrib)}
+.dir h3{margin:0 0 4px;font-size:14.5px;font-weight:600;color:var(--c)}
+.dir p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.dir .formula{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);margin-top:7px}
+
+/* --- explorador --- */
+.explorer{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){ .explorer{grid-template-columns:1fr} }
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.panel-head{padding:12px 15px;border-bottom:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.panel-head h2{margin:0;font-size:13px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600}
+.count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3)}
+#q{width:100%;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);
+  border-radius:7px;padding:8px 11px;font:inherit;font-size:14px}
+#q:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.searchbox{padding:11px 15px;border-bottom:1px solid var(--line)}
+.list{max-height:560px;overflow-y:auto}
+.row{display:block;width:100%;text-align:left;border:0;background:transparent;cursor:pointer;
+  font:inherit;color:inherit;padding:9px 15px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--surface-2)}
+.row[aria-current="true"]{background:var(--contain-soft);box-shadow:inset 3px 0 0 var(--contain)}
+.row:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.row .name{display:block;font-size:13.7px;line-height:1.35;margin-bottom:5px}
+.row .meta{display:flex;align-items:center;gap:8px}
+.track{flex:1;height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;min-width:40px}
+.track i{display:block;height:100%;background:var(--bar,var(--ink-3));border-radius:3px}
+.row .val{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* --- detalle --- */
+.detail{padding:18px 20px}
+.detail h3{font-family:Spectral,Georgia,serif;font-size:23px;font-weight:600;margin:0 0 7px;
+  line-height:1.22;text-wrap:balance}
+.detail .desc{color:var(--ink-2);font-size:14.5px;margin:0 0 15px;max-width:66ch}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:20px;padding:3px 11px;color:var(--ink-2);
+  background:var(--surface-2)}
+.chip b{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--ink)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:9px}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);
+  position:sticky;top:0;vertical-align:bottom}
+th .hint{display:block;text-transform:none;letter-spacing:0;font-size:10.5px;color:var(--ink-3);
+  font-weight:400;margin-top:2px}
+th.k{color:var(--contrib)} th.c{color:var(--contain)}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-2)}
+.linkish{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
+  text-decoration:underline;text-decoration-color:var(--ink-3);text-underline-offset:2px}
+.linkish:hover{text-decoration-color:var(--focus);color:var(--focus)}
+.linkish:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}
+.bar{display:flex;align-items:center;gap:8px}
+.bar .track{width:78px;flex:none}
+.bar .val{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-variant-numeric:tabular-nums;
+  min-width:52px;text-align:right}
+td.k .val{color:var(--contrib)} td.c .val{color:var(--contain)}
+td.k .track i{background:var(--contrib)} td.c .track i{background:var(--contain)}
+.unit-meta{font-size:11.5px;color:var(--ink-3);display:block;margin-top:2px}
+.back{margin-bottom:12px}
+.note{font-size:12.5px;color:var(--ink-3);margin:11px 2px 0;max-width:72ch}
+
+/* --- metodologia --- */
+.method{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:22px 24px}
+.method h2{font-family:Spectral,Georgia,serif;font-size:22px;font-weight:600;margin:0 0 4px;line-height:1.2}
+.method h3{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;margin:28px 0 10px}
+.method h3:first-of-type{margin-top:18px}
+.method p{margin:0 0 11px;max-width:70ch;color:var(--ink-2);font-size:14.3px}
+.method p b,.method li b{color:var(--ink)}
+.flow{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;
+  overflow:hidden;grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+.step{background:var(--surface);padding:13px 15px}
+.step .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--contain);font-weight:500}
+.step .t{display:block;font-weight:600;font-size:13.8px;margin:3px 0 4px}
+.step .d{font-size:12.6px;color:var(--ink-2);line-height:1.45}
+.formula-box{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--c);
+  border-radius:8px;padding:13px 16px;margin:0 0 12px}
+.formula-box.c{--c:var(--contain)} .formula-box.k{--c:var(--contrib)} .formula-box.e{--c:var(--ink-3)}
+.formula-box .q{font-weight:600;font-size:14px;margin:0 0 5px;color:var(--c)}
+.formula-box code{font-family:"IBM Plex Mono",monospace;font-size:13px;display:block;margin:5px 0;color:var(--ink)}
+.formula-box .x{font-size:13px;color:var(--ink-2);margin:0}
+.formula-box .terms{list-style:none;margin:8px 0 0;padding:9px 0 0;border-top:1px dashed var(--line);
+  font-size:12.4px;color:var(--ink-2)}
+.formula-box .terms li{margin:3px 0;padding-left:0}
+.formula-box .terms code{background:none;display:inline;margin:0;padding:0;font-size:12.2px;
+  color:var(--c);font-weight:600}
+.exp{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:16px}
+.exp-head{background:var(--surface-2);padding:11px 15px;border-bottom:1px solid var(--line)}
+.exp-head .nm{font-weight:600;font-size:14.5px}
+.exp-head .fl{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);display:block;margin-top:2px}
+.fills{width:100%;border-collapse:collapse;font-size:13px;min-width:0}
+.fills td{padding:6px 15px;border-bottom:1px solid var(--line)}
+.fills tr:last-child td{border-bottom:0}
+.fills .cn{font-family:"IBM Plex Mono",monospace;font-size:12.2px}
+.fills .bar-td{width:46%}
+.fills .pc{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  font-size:12.2px;white-space:nowrap}
+.fills .track{width:100%;height:6px}
+.tag{display:inline-block;font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:0 5px;
+  color:var(--ink-3);margin-left:6px;vertical-align:1px}
+.warn{border-left:3px solid var(--contrib);background:var(--contrib-soft);border-radius:0 8px 8px 0;
+  padding:11px 15px;margin:0 0 12px}
+.warn p{margin:0;color:var(--ink);font-size:13.5px}
+.cc{color:var(--contain)} .kk{color:var(--contrib)}
+.calc{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:0 0 14px}
+.calc-step{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:13px 15px;
+  border-bottom:1px solid var(--line);background:var(--surface)}
+.calc-step:last-child{border-bottom:0}
+.calc-step .s{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);
+  font-weight:500;padding-top:2px}
+.calc-step .b{min-width:0}
+.calc-step .b p{margin:0 0 6px;font-size:13.6px;color:var(--ink-2)}
+.calc-step .b p:last-child{margin-bottom:0}
+.calc-step code{font-family:"IBM Plex Mono",monospace;font-size:12.8px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block;color:var(--ink)}
+.calc-step .eq{display:block;margin:7px 0 0;padding:9px 12px;background:var(--surface-2);
+  border-radius:6px;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink);
+  overflow-x:auto;white-space:nowrap}
+.calc-step .tablewrap{margin:8px 0 0}
+.calc-step table{min-width:0;font-size:12.6px}
+.calc-step th,.calc-step td{padding:6px 10px}
+.calc-step td.nm{font-size:12.4px;color:var(--ink-2)}
+.mixnum{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;
+  white-space:nowrap}
+th.mixnum{text-align:right}
+.zero{color:var(--ink-3)}
+.calc-step .warnline{font-size:12.4px;color:var(--ink-3);margin-top:8px}
+footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-3);font-size:12.5px}
+footer p{margin:0 0 6px;max-width:78ch}
+@media (prefers-reduced-motion:no-preference){ .track i{transition:width .18s ease} }
+</style>
+<div class="wrap">
+  <p class="eyebrow">Libro Blanco · Proyecto Pulso · PUCP</p>
+  <h1>Atlas Temático PUCP</h1>
+  <p class="sub">Cada proyecto y cada publicación se reparte entre varios temas.</p>
+
+  <div class="domains" role="group" aria-label="Universo a explorar">
+    <button type="button" id="dom-projects" data-dom="projects" aria-pressed="true">Proyectos</button>
+    <button type="button" id="dom-pubs" data-dom="publications_linked" aria-pressed="false">Publicaciones de proyectos</button>
+    <button type="button" id="dom-method" data-dom="__method__" aria-pressed="false">Metodología</button>
+  </div>
+
+  <dl class="metrics" id="metrics"></dl>
+
+  <div class="legend">
+    <div class="dir contain">
+      <h3>Cuánto de la unidad es este tema</h3>
+      <p>Suma 100 % en cada proyecto o publicación. Responde: «¿de qué trata esta unidad?»</p>
+      <p class="formula">C[u,t] = afinidad(u,t) ÷ Σ<sub>temas</sub> afinidad(u,·)</p>
+    </div>
+    <div class="dir contrib">
+      <h3>Cuánto del tema aporta la unidad</h3>
+      <p>Suma 100 % en cada tema. Responde: «¿quién sostiene este tema?»</p>
+      <p class="formula">K[u,t] = C[u,t] ÷ Σ<sub>unidades</sub> C[·,t]</p>
+    </div>
+  </div>
+
+  <div class="explorer" id="explorer">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="listTitle">Temas</h2>
+        <span class="count" id="listCount"></span>
+      </div>
+      <div class="searchbox">
+        <label class="sr" for="q" hidden>Buscar</label>
+        <input type="search" id="q" placeholder="Buscar tema o unidad…" autocomplete="off">
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="panel">
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>
+
+  <section class="method" id="method" hidden></section>
+
+  <footer>
+    <p id="prov"></p>
+  </footer>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script id="method-data" type="application/json">__METHOD__</script>
+<script>
+(function(){
+  "use strict";
+  var DATA = JSON.parse(document.getElementById('data').textContent);
+  var META = JSON.parse(document.getElementById('method-data').textContent);
+  var dom = 'projects', mode = 'topic', sel = null, query = '';
+  var idx = {};
+
+  function build(d){
+    if (idx[d]) return idx[d];
+    var D = DATA[d], byTopic = {}, byUnit = {};
+    D.cells.forEach(function(c){
+      (byTopic[c[1]] = byTopic[c[1]] || []).push({u:c[0], c:c[2], k:c[3]});
+      (byUnit[c[0]] = byUnit[c[0]] || []).push({t:c[1], c:c[2], k:c[3]});
+    });
+    Object.keys(byTopic).forEach(function(t){ byTopic[t].sort(function(a,b){return b.k-a.k;}); });
+    Object.keys(byUnit).forEach(function(u){ byUnit[u].sort(function(a,b){return b.c-a.c;}); });
+    idx[d] = {byTopic:byTopic, byUnit:byUnit};
+    return idx[d];
+  }
+  function pct(x, dp){ return (x*100).toFixed(dp===undefined?1:dp) + ' %'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(m){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[m]; }); }
+  function el(tag, cls, txt){ var e=document.createElement(tag); if(cls)e.className=cls;
+    if(txt!=null)e.textContent=txt; return e; }
+
+
+  var NAMES = {projects:'Proyectos', publications_linked:'Publicaciones de proyectos'};
+  function renderMethod(){
+    var A = 'Cuánto de la unidad es este tema';
+    var B = 'Cuánto del tema aporta la unidad';
+    var box = document.getElementById('method');
+    if (box.dataset.done) return;
+    box.dataset.done = '1';
+    // Todo numero concreto de esta pestana sale de la corrida cargada, no
+    // escrito a mano: si se renormaliza, el ejemplo se actualiza solo.
+    var dom0 = DATA.projects ? 'projects' : Object.keys(DATA)[0];
+    var D0 = DATA[dom0], EX = D0.ex || {}, E = EX.main, BIG = EX.big, SM = EX.small;
+    var NTEMAS = Object.keys(D0.topics).length, NUNI = Object.keys(D0.units).length;
+    function n(x, dp){ return Number(x).toLocaleString('es-ES',
+        {minimumFractionDigits: dp, maximumFractionDigits: dp}); }
+    var h = [];
+    h.push('<h2>Cómo se produjeron estos porcentajes</h2>');
+    h.push('<p>Cada universo se procesa por separado, con su propio espacio de temas. El mismo ' +
+           'código corre para los dos; sólo cambia el CSV de origen y las columnas que aportan texto.</p>');
+
+    h.push('<h3>Flujo de datos</h3><div class="flow">');
+    [['01','Unidades de texto','Se concatenan las columnas con contenido temático de cada fila. Las columnas vacías se omiten'],
+     ['02','Extracción de temas','Un LLM lee cada unidad y devuelve de 1 a 5 temas con descripción, <b>cita literal</b> y confianza (0–1). La cita se verifica contra el texto de origen.'],
+     ['03','Normalización','Se convierte a embedding cada tema extraído y se agrupan por similitud coseno, sin intervención del LLM. Sólo después un LLM pone nombre y descripción a cada grupo ya formado. Resultado: '+NTEMAS+' temas normalizados.'],
+     ['04','Cuantificación','Se construye la matriz de afinidad y se normaliza en las dos direcciones. Es la etapa que produce los porcentajes.']
+    //  ['05','Reportes','Tablas, métricas de la partición y consumo de recursos por etapa.']
+    ].forEach(function(s){
+      h.push('<div class="step"><span class="n">'+s[0]+'</span><span class="t">'+s[1]+
+             '</span><span class="d">'+s[2]+'</span></div>');
+    });
+    h.push('</div>');
+
+    h.push('<h3>Un ejemplo, paso a paso</h3>');
+    h.push('<p>' + (dom0 === 'projects' ? 'Proyecto' : 'Publicación') + ' <b>' + E.uid +
+           ' — «' + E.u + '»</b>, de la corrida real. Así se llega a sus dos porcentajes.</p>');
+    var P = E.parts || {}, CO = P.comp || [], LL = P.llm || [];
+    function fila(c){
+      return '<tr><td class="nm">' + c.t + '</td>' +
+             '<td class="mixnum">' + (c.cos ? n(c.cos, 4) : '—') + '</td>' +
+             '<td class="mixnum' + (c.e ? '' : ' zero') + '">' + n(c.e, 4) + '</td>' +
+             '<td class="mixnum' + (c.s ? '' : ' zero') + '">' + n(c.s, 4) + '</td>' +
+             '<td class="mixnum"><b>' + n(c.w, 4) + '</b></td></tr>';
+    }
+    h.push('<div class="calc">' +
+      '<div class="calc-step"><span class="s">1</span><div class="b">' +
+        '<p>El LLM lee el texto de la unidad y extrae sus temas, cada uno con una cita literal ' +
+        'verificada contra el texto y una confianza de 0 a 1. Para esta unidad devolvió ' +
+        LL.length + ':</p>' +
+        '<span class="eq">' + LL.map(function(x){
+            return n(x.c, 2) + '&nbsp; «' + x.t + '»'; }).join('<br>') + '</span></div></div>' +
+
+      '<div class="calc-step"><span class="s">2</span><div class="b">' +
+        '<p><b>Primera parte: temas normalizados</b> Esos temas extraídos se agrupan por ' +
+        '<b>geometría, no por criterio del LLM</b>: cada uno se convierte en embedding y entra ' +
+        'en un grupo si supera un umbral de similitud coseno calibrado sobre el propio corpus. ' +
+        'Recién con los grupos ya cerrados un LLM mira cada uno y le pone nombre y descripción; ' +
+        '</p>' +
+        '<p>Aquí los ' + LL.length + ' temas extraídos cayeron ' +
+        (P.nllm === 1 ? 'todos en el mismo grupo, <b>«' + E.t + '»</b>: un único 1,0000 y cero ' +
+                        'en los otros ' + (NTEMAS - 1) + ' temas.' :
+                        'en ' + P.nllm + ' grupos distintos.') +
+        '</p></div></div>' +
+
+      '<div class="calc-step"><span class="s">3</span><div class="b">' +
+        '<p><b>Segunda mitad: lo que dice el texto completo.</b> El LLM no dice nada sobre los ' +
+        'demás temas, así que con eso solo la unidad sería 100 % un tema y 0 % todo lo demás. ' +
+        'Aparte se mide entonces la similitud coseno entre el embedding de la unidad entera y el ' +
+        'centroide de cada uno de los ' + NTEMAS + ' temas (el centroide es la media de los ' +
+        'embeddings de los temas extraídos que cayeron en él).</p>' +
+        '<p>Esa similitud se recorta antes de usarla: se descarta lo que no pasa de ' +
+        n(P.floor, 2) + ', se conservan los ' + P.k + ' temas más cercanos y se elevan a ' +
+        n(P.power, 0) + '.</p></div></div>' +
+
+      '<div class="calc-step"><span class="s">4</span><div class="b">' +
+        '<p><b>Las dos mitades se mezclan:</b> ' + n(P.alpha*100, 0) + ' % la extracción del LLM y ' +
+        n((1-P.alpha)*100, 0) + ' % la similitud.</p>' +
+        '<div class="tablewrap"><table><thead><tr><th>Tema</th>' +
+        '<th class="mixnum">Coseno<span class="hint">crudo</span></th>' +
+        '<th class="mixnum">LLM<span class="hint">fila normalizada</span></th>' +
+        '<th class="mixnum">Embedding<span class="hint">fila normalizada</span></th>' +
+        '<th class="mixnum">Afinidad<span class="hint">' + n(P.alpha, 1) + '·LLM + ' +
+        n(1-P.alpha, 1) + '·emb.</span></th></tr></thead><tbody>' +
+        CO.map(fila).join('') + '</tbody></table></div>' +
+        (CO.length ? '<span class="eq">' + n(P.alpha, 1) + ' × ' + n(CO[0].e, 4) +
+          '&nbsp; + &nbsp;' + n(1-P.alpha, 1) + ' × ' + n(CO[0].s, 4) + ' = <b>' +
+          n(CO[0].w, 4) + '</b></span>' : '') +
+        '<p class="warnline">Sólo la primera celda tiene evidencia textual detrás. Las otras ' +
+        (CO.length - 1) + ' son ' + n(1-P.alpha, 1) + ' × similitud y nada más: proximidad ' +
+        'semántica del texto, no algo que el LLM haya afirmado de esta unidad.</p></div></div>' +
+
+      '<div class="calc-step"><span class="s">5</span><div class="b">' +
+        '<p><b class="cc">' + A + '</b> — se divide cada afinidad entre la suma de su fila:</p>' +
+        '<span class="eq">' + n(E.aff, 4) + ' ÷ ' + n(E.rowsum, 4) + ' = <b class="cc">' +
+        n(E.c, 3) + ' → ' + n(E.c*100, 1) + ' %</b></span>' +
+        '<p style="margin-top:7px">Es decir: el ' + n(E.c*100, 1) + ' % de lo que esta unidad trata ' +
+        'es ese tema. Las ' + E.nrow + ' cifras de la fila suman 100 %.</p></div></div>' +
+      '<div class="calc-step"><span class="s">6</span><div class="b">' +
+        '<p>Se suma esa misma columna sobre las ' + n(NUNI, 0) + ' unidades. El tema recibe ' +
+        'fracciones de muchas de ellas y acumula <b>' + n(E.eq, 2) + ' unidades-equivalentes</b>: ' +
+        'vale ' + n(E.eq, 2) + ' unidades enteras, aunque lo rocen ' + E.nt + '.</p></div></div>' +
+      '<div class="calc-step"><span class="s">7</span><div class="b">' +
+        '<p><b class="kk">' + B + '</b> — se divide la cifra del paso 5 entre el tamaño del tema:</p>' +
+        '<span class="eq">' + n(E.c, 3) + ' ÷ ' + n(E.eq, 2) + ' = <b class="kk">' +
+        n(E.k, 3) + ' → ' + n(E.k*100, 1) + ' %</b></span>' +
+        '<p style="margin-top:7px">Esta unidad es, ella sola, el ' + n(E.k*100, 1) + ' % de todo el ' +
+        'tema. Las cifras de la columna suman 100 % entre las ' + E.nt + ' unidades que lo tocan.' +
+        '</p></div></div>' +
+    '</div>');
+
+
+
+    h.push('<h3>Las dos fórmulas</h3>');
+    h.push('<p>Todo parte de una matriz de afinidad <code>w[u,t]</code>: cuánta evidencia hay de que ' +
+           'la unidad <i>u</i> trata del tema <i>t</i>. Se construye mezclando la masa de confianza ' +
+           'de los temas que el LLM extrajo (70 %) con la similitud coseno entre la unidad y el ' +
+           'centroide del tema (30 %).</p>');
+    h.push('<div class="formula-box c"><p class="q">Cuánto de la unidad es este tema &nbsp;=&nbsp</p>' +
+           '<code>C[u,t] = w[u,t] ÷ Σ<sub>temas</sub> w[u,·]</code>' +
+           '<p class="x">«Sé que estoy mirando este proyecto: ¿qué probabilidad hay de que hable de ' +
+           'este tema?» Suma 100 % en cada unidad.</p>' +
+           '<ul class="terms">' +
+             '<li><code>u, t</code> — una unidad fija (este proyecto) y un tema fijo.</li>' +
+             '<li><code>w[u,t]</code> — la afinidad cruda de esa celda: ' + n(E.aff, 4) + ' en el ejemplo.</li>' +
+             '<li><code>Σ<sub>temas</sub> w[u,·]</code> — se deja <code>u</code> fijo y se suma ' +
+               '<code>w</code> sobre <b>todos los temas</b>: el total de la fila del proyecto, ' + n(E.rowsum, 4) + '.</li>' +
+             '<li><code>C[u,t]</code> — el cociente: ' + n(E.aff, 4) + ' ÷ ' + n(E.rowsum, 4) + ' = ' +
+               n(E.c, 4) + '. Al sumar sobre temas en el denominador, todas las <code>C</code> de un ' +
+               'mismo proyecto suman 100 %.</li>' +
+           '</ul></div>');
+    h.push('<div class="formula-box k"><p class="q">Cuánto del tema aporta la unidad &nbsp;=&nbsp</p>' +
+           '<code>K[u,t] = C[u,t] ÷ E[t]</code>' +
+           '<p class="x">«Sé que estoy mirando este tema: ¿qué probabilidad hay de que venga de este ' +
+           'proyecto?» Suma 100 % en cada tema.</p>' +
+           '<ul class="terms">' +
+             '<li><code>C[u,t]</code> — la misma cifra de la fórmula anterior: ' + n(E.c, 4) + '.</li>' +
+             '<li><code>E[t]</code> — se deja <code>t</code> fijo y se suma <code>C</code> sobre ' +
+               '<b>todas las unidades</b>: el total de la columna del tema, ' + n(E.eq, 2) +
+               ' unidades-equivalentes.</li>' +
+             '<li><code>K[u,t]</code> — el cociente: ' + n(E.c, 4) + ' ÷ ' + n(E.eq, 2) + ' = ' +
+               n(E.k, 4) + '. Al sumar sobre unidades en el denominador, todas las <code>K</code> de ' +
+               'un mismo tema suman 100 %.</li>' +
+           '</ul></div>');
+   h.push('<p><b>Unidades efectivas</b> de un tema = 1 ÷ Σ K², y <b>temas efectivos</b> de una unidad ' +
+           '= 1 ÷ Σ C². Si diez proyectos aportan un 10 % cada uno, salen 10 efectivos; si uno aporta ' +
+           'el 90 % y nueve el 1,1 %, sale 1,2.</p>');
+
+ 
+
+    h.push('<h3>De dónde salen los nombres y descripciones de los temas</h3>');
+    h.push('<p>Los escribe el LLM en la etapa 03, a partir de los temas extraídos que el agrupamiento ' +
+           'reunió en cada grupo. <b>No provienen de ningún documento de origen</b>: son una síntesis ' +
+           'de los temas miembros, no una cita. El LLM <b>nombra</b> el grupo; no decide quién entra ' +
+           'en él, eso ya lo resolvió la similitud coseno.</p>');
+
+    h.push('<h3>Insumos por experimento</h3>');
+    h.push('<p>Qué columnas aportan texto y en qué proporción de las filas están llenas. ');
+    Object.keys(META).forEach(function(d){
+      var m = META[d];
+      // En proyectos, cris_*, source_* y openalex_abstract son insumos
+      // auxiliares que aqui solo agregan ruido a la tabla de llenado; no
+      // afectan el pipeline, solo esta vista. openalex_abstract en particular
+      // no es un abstract del PROYECTO (OpenAlex no indexa proyectos, solo
+      // publicaciones) -- es el abstract de un RESULTADO DECLARADO del
+      // proyecto (una publicacion que produjo), recuperado de OpenAlex cuando
+      // esa publicacion no traia abstract propio en CRIS/Scopus/WoS. Se anota
+      // debajo de la tabla en vez de ocultarlo sin explicacion.
+      var cols = d === 'projects' ? m.cols.filter(function(c){
+        var name = c.n.replace('aux:','');
+        return !/^cris/i.test(name) && !/^source/i.test(name) && name !== 'openalex_abstract';
+      }) : m.cols;
+      var hadOpenAlex = d === 'projects' &&
+        m.cols.some(function(c){ return c.n.replace('aux:','') === 'openalex_abstract'; });
+      h.push('<div class="exp"><div class="exp-head"><span class="nm">'+NAMES[d]+'</span>' +
+             '<span class="fl">'+m.src+' · '+m.rows.toLocaleString('es')+' filas → '+
+             m.units.toLocaleString('es')+' unidades' +
+             (m.dropped ? ' · '+m.dropped.toLocaleString('es')+' descartadas (sin ninguna de '+
+               m.req.join('/')+')' : '') +
+             ' · mediana '+m.chars.p50.toLocaleString('es')+' caracteres por unidad</span></div>' +
+             '<table class="fills"><tbody>');
+      cols.forEach(function(c){
+        h.push('<tr><td class="cn">'+c.n.replace('aux:','')+'</td>' +
+               '<td class="bar-td"><div class="track"><i style="width:'+
+               Math.max(1.5,c.f*100).toFixed(1)+'%;background:var(--contain)"></i></div></td>' +
+               '<td class="pc">'+(c.f*100).toFixed(1)+' %  ·  '+c.r.toLocaleString('es')+'</td></tr>');
+      });
+    });
+
+    h.push('<h3>Modelos</h3>');
+    h.push('<p>Extracción y nombrado: <code>Claude Sonnet 5</code> en Amazon Bedrock, temperatura ' +
+           'no aplicable (eliminada en este modelo), esfuerzo <code>low</code>. Embeddings: ' +
+           '<code>cohere.embed-multilingual-v3</code>, 1024 dimensiones, textos de más de 2048 ' +
+           'caracteres troceados y promediados. Los vectores se guardan en PostgreSQL con pgvector.</p>');
+    box.innerHTML = h.join('');
+  }
+
+  function renderMetrics(){
+    var D = DATA[dom];
+    var items = [
+      ['Unidades', D.nu.toLocaleString('es'), D.noun + 's analizadas'],
+      ['Temas', D.nt, 'espacio propio de este universo'],
+    ];
+    var dl = document.getElementById('metrics'); dl.textContent='';
+    items.forEach(function(it){
+      var w = el('div','metric');
+      w.appendChild(el('dt',null,it[0]));
+      var dd = el('dd',null,it[1]);
+      dd.appendChild(el('span','note',it[2]));
+      w.appendChild(dd); dl.appendChild(w);
+    });
+    document.getElementById('prov').textContent =
+      'Corrida ' + D.run + ' · ' + D.label + ' · extracción con Claude Sonnet 5 y embeddings ' +
+      'cohere.embed-multilingual-v3 sobre Amazon Bedrock.';
+  }
+
+  function renderList(){
+    var D = DATA[dom], I = build(dom), list = document.getElementById('list');
+    list.textContent='';
+    var q = query.trim().toLowerCase();
+    var rows;
+    if (mode === 'unit' || (q && q.length >= 2)) {
+      // con busqueda se mezclan temas y unidades, priorizando temas
+      var t = Object.keys(D.topics).filter(function(id){
+        return !q || D.topics[id].l.toLowerCase().indexOf(q) >= 0; })
+        .sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })
+        .map(function(id){ return {kind:'t', id:id}; });
+      var u = !q ? [] : Object.keys(D.units).filter(function(id){
+        return D.units[id].t.toLowerCase().indexOf(q) >= 0; })
+        .slice(0,120).map(function(id){ return {kind:'u', id:id}; });
+      rows = t.concat(u);
+    } else {
+      rows = Object.keys(D.topics).sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })
+        .map(function(id){ return {kind:'t', id:id}; });
+    }
+    var maxEq = 1;
+    Object.keys(D.topics).forEach(function(id){ maxEq = Math.max(maxEq, D.topics[id].eq); });
+
+    document.getElementById('listCount').textContent =
+      rows.length + (q ? ' resultados' : ' temas');
+
+    rows.forEach(function(r){
+      var b = el('button','row'); b.type='button';
+      b.setAttribute('aria-current', (sel && sel.kind===r.kind && sel.id===r.id) ? 'true':'false');
+      if (r.kind === 't'){
+        var t = D.topics[r.id];
+        b.appendChild(el('span','name', t.l));
+        var m = el('div','meta');
+        var tr = el('div','track'); tr.style.setProperty('--bar','var(--contain)');
+        var i = el('i'); i.style.width = Math.max(2,(t.eq/maxEq*100)) + '%'; tr.appendChild(i);
+        m.appendChild(tr);
+        m.appendChild(el('span','val', t.eq.toFixed(1) + ' eq · ' + t.n + ' ' + D.noun.slice(0,3) + '.'));
+        b.appendChild(m);
+      } else {
+        var u = D.units[r.id];
+        b.appendChild(el('span','name', u.t));
+        var m2 = el('div','meta');
+        m2.appendChild(el('span','val', (u.eff!=null? u.eff.toFixed(2)+' temas efectivos' : '') +
+          (u.g ? ' · ' + u.g : '')));
+        b.appendChild(m2);
+      }
+      b.addEventListener('click', function(){ sel = r; renderList(); renderDetail();
+        document.getElementById('detail').scrollIntoView({block:'nearest'}); });
+      list.appendChild(b);
+    });
+  }
+
+  function barCell(cls, value, scale){
+    var td = el('td', cls);
+    var w = el('div','bar');
+    var tr = el('div','track'); var i = el('i');
+    i.style.width = Math.max(1.5, Math.min(100, value/scale*100)) + '%';
+    tr.appendChild(i); w.appendChild(tr);
+    w.appendChild(el('span','val', pct(value, value < 0.01 ? 2 : 1)));
+    td.appendChild(w); return td;
+  }
+
+  function renderDetail(){
+    var D = DATA[dom], I = build(dom), box = document.getElementById('detail');
+    box.textContent = '';
+    if (!sel){
+      box.appendChild(el('h3',null,'Elige un tema'));
+      box.appendChild(el('p','desc','La lista de la izquierda ordena los ' + D.nt +
+        ' temas por tamaño real (unidades-equivalentes). También puedes buscar un ' + D.noun +
+        ' concreto por su título para ver cómo se reparte entre temas.'));
+      return;
+    }
+    if (sel.kind === 't'){
+      var t = D.topics[sel.id], rows = (I.byTopic[sel.id]||[]).slice(0, 40);
+      box.appendChild(el('h3', null, t.l));
+      if (t.d) box.appendChild(el('p','desc', t.d));
+      var chips = el('div','chips');
+      [['Del corpus', pct(t.sh)],
+       [D.noun.charAt(0).toUpperCase()+D.noun.slice(1)+'s que lo tocan', t.n],
+       ['Temas extraídos que lo componen', t.v]
+      ].forEach(function(c){
+        var s = el('span','chip'); s.appendChild(document.createTextNode(c[0]+' '));
+        var bEl = el('b',null,String(c[1])); s.appendChild(bEl); chips.appendChild(s);
+      });
+      box.appendChild(chips);
+
+      var maxK = rows.length ? rows[0].k : 1;
+      var wrap = el('div','tablewrap'), tbl = el('table');
+      tbl.innerHTML = '<thead><tr>' +
+        '<th>' + esc(D.noun.charAt(0).toUpperCase()+D.noun.slice(1)) + '</th>' +
+        '<th class="k">Cuánto del tema aporta la unidad<span class="hint">barra a escala del mayor valor de la tabla</span></th>' +
+        '<th class="c">Cuánto de la unidad es este tema<span class="hint">barra sobre 100 %</span></th>' +
+        '</tr></thead>';
+      var tb = el('tbody');
+      rows.forEach(function(r){
+        var u = D.units[r.u] || {t:r.u};
+        var tr = el('tr');
+        var td = el('td');
+        var link = el('button','linkish', u.t || r.u); link.type='button';
+        link.addEventListener('click', function(){ sel={kind:'u',id:r.u}; renderList(); renderDetail(); });
+        td.appendChild(link);
+        var meta = [u.y||'', u.g||''].filter(Boolean).join(' · ');
+        if (meta) td.appendChild(el('span','unit-meta', meta));
+        tr.appendChild(td);
+        tr.appendChild(barCell('k', r.k, maxK));
+        tr.appendChild(barCell('c', r.c, 1));
+        tb.appendChild(tr);
+      });
+      tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
+      if ((I.byTopic[sel.id]||[]).length > 40)
+        box.appendChild(el('p','note','Se muestran las 40 unidades que más aportan, de ' +
+          (I.byTopic[sel.id].length) + '.'));
+      box.appendChild(el('p','note','Las dos columnas responden preguntas distintas y rara vez coinciden: ' +
+        'la unidad que más aporta al tema no es siempre la que más se dedica a él.'));
+    } else {
+      var u2 = D.units[sel.id], rws = (I.byUnit[sel.id]||[]);
+      var back = el('div','back');
+      var bb = el('button','linkish','← volver a los temas'); bb.type='button';
+      bb.addEventListener('click', function(){ sel=null; query=''; document.getElementById('q').value='';
+        renderList(); renderDetail(); });
+      back.appendChild(bb); box.appendChild(back);
+      box.appendChild(el('h3', null, u2 ? u2.t : sel.id));
+      var meta2 = [u2 && u2.y, u2 && u2.g].filter(Boolean).join(' · ');
+      if (meta2) box.appendChild(el('p','desc', meta2));
+      var ch = el('div','chips');
+      [['Temas con presencia', rws.length],
+       ['Temas efectivos', (u2 && u2.eff!=null) ? u2.eff.toFixed(2) : '—'],
+       ['Identificador', sel.id]
+      ].forEach(function(c){ var s=el('span','chip'); s.appendChild(document.createTextNode(c[0]+' '));
+        s.appendChild(el('b',null,String(c[1]))); ch.appendChild(s); });
+      box.appendChild(ch);
+
+      var maxK2 = rws.reduce(function(m,r){ return Math.max(m, r.k); }, 0.0001);
+      var wr = el('div','tablewrap'), tb2 = el('table');
+      tb2.innerHTML = '<thead><tr><th>Tema</th>' +
+        '<th class="c">Cuánto de la unidad es este tema<span class="hint">barra sobre 100 %</span></th>' +
+        '<th class="k">Cuánto del tema aporta la unidad<span class="hint">barra a escala del mayor valor de la tabla</span></th>' +
+        '</tr></thead>';
+      var body2 = el('tbody');
+      rws.forEach(function(r){
+        var tp = D.topics[r.t] || {l:r.t};
+        var tr = el('tr'), td = el('td');
+        var lk = el('button','linkish', tp.l); lk.type='button';
+        lk.addEventListener('click', function(){ sel={kind:'t',id:r.t}; renderList(); renderDetail(); });
+        td.appendChild(lk); tr.appendChild(td);
+        tr.appendChild(barCell('c', r.c, 1));
+        tr.appendChild(barCell('k', r.k, maxK2));
+        body2.appendChild(tr);
+      });
+      tb2.appendChild(body2); wr.appendChild(tb2); box.appendChild(wr);
+      box.appendChild(el('p','note','La columna verde suma 100 % en esta unidad: es cómo se reparte su ' +
+        'contenido. La naranja no suma nada en particular aquí, porque compara esta unidad con ' +
+        'todas las demás dentro de cada tema.'));
+    }
+  }
+
+  document.querySelectorAll('.domains button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.domains button').forEach(function(o){
+        o.setAttribute('aria-pressed', String(o === b)); });
+      var isMethod = b.dataset.dom === '__method__';
+      document.getElementById('explorer').hidden = isMethod;
+      document.getElementById('method').hidden = !isMethod;
+      document.querySelector('.metrics').hidden = isMethod;
+      document.querySelector('.legend').hidden = isMethod;
+      if (isMethod){ renderMethod(); return; }
+      dom = b.dataset.dom; sel = null; query=''; document.getElementById('q').value='';
+      renderMetrics(); renderList(); renderDetail();
+    });
+  });
+  document.getElementById('q').addEventListener('input', function(e){
+    query = e.target.value; renderList();
+  });
+
+  // Estado inicial: el tema mas grande ya abierto, para que la pagina se lea de entrada.
+  renderMetrics();
+  (function(){
+    var D = DATA[dom];
+    var top = Object.keys(D.topics).sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })[0];
+    sel = {kind:'t', id:top};
+  })();
+  renderList(); renderDetail();
+})();
+</script>
