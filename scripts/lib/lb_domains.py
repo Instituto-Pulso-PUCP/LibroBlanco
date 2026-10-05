@@ -60,6 +60,13 @@ class Domain:
     aux_text_columns: list[str] = field(default_factory=list)
     aux_max_rows: int = 5              # cuantos resultados por unidad, como maximo
     aux_label: str = "resultado declarado"
+    # Si se declara, el auxiliar es un FALLBACK, no un agregado: solo se usa
+    # cuando estas columnas, juntas, no llegan a aux_min_primary_chars. Sin
+    # esto, el texto de "lo que el proyecto publico" (aux) se apila siempre
+    # encima de "lo que el proyecto dice que es" (p.ej. cris_abstract), aun
+    # cuando la segunda ya es una descripcion completa por si sola.
+    aux_primary_columns: list[str] = field(default_factory=list)
+    aux_min_primary_chars: int = 0
 
 
 DOMAINS: dict[str, Domain] = {
@@ -69,12 +76,16 @@ DOMAINS: dict[str, Domain] = {
         source_csv=REPO_ROOT / "salidas" / "01_projects_closed_con_cris.csv",
         id_column="project_id",
         title_column="title",
-        text_columns=[
-            "title", "cris_abstract", "cris_keywords", "cris_fos",
-            "cris_ocde_subject", "knowledge_area",
-            "research_line_1", "research_line_2", "research_line_3",
-            "research_line_4", "research_line",
-        ],
+        # 2026-09-30: reducido a estas tres tras el export CRIS del 29-set
+        # (cris_abstract paso de 0.9% a 66.3% de los 975 proyectos). Se probo
+        # con knowledge_area + research_line* sumados: la mediana de
+        # caracteres casi no cambiaba (1547 -> 1569) porque son etiquetas
+        # cortas, y quedaban implicitos en cris_keywords de todos modos.
+        # cris_fos se dejo fuera a proposito: solo 6 valores posibles en toda
+        # la universidad (a veces repetido, "Social sciences||Social
+        # sciences"), aporta casi nada. cris_ocde_subject nunca aporto nada
+        # (son URIs, ver excluded_columns).
+        text_columns=["title", "cris_abstract", "cris_keywords"],
         metadata_columns=[
             "year", "project_type", "knowledge_area", "executing_unit",
             "executing_section", "funding_type", "coordinator_norm",
@@ -87,6 +98,15 @@ DOMAINS: dict[str, Domain] = {
             "cris_coinvestigators": "Nombres de personas: introducen ruido de nombres propios.",
             "coordinator_norm": "Idem; se guarda como metadato pero no se embebe.",
             "status": "Constante en este universo (todos cerrados).",
+            "cris_fos": "Solo 6 valores posibles en toda la universidad (a veces repetido "
+                       "literalmente); casi no discrimina entre proyectos.",
+            "cris_ocde_subject": "Son URIs (p.ej. .../ford#5.07.03), no texto: clean_value() las "
+                                 "descarta. Nunca aporto un caracter al embedding, en ningun export.",
+            "knowledge_area": "Etiqueta corta; con cris_abstract presente aporta poco texto nuevo. "
+                              "Se sigue guardando como metadato (knowledge_area_column) para "
+                              "mostrarla, solo no se embebe.",
+            "research_line_1": "Idem knowledge_area.", "research_line_2": "Idem.",
+            "research_line_3": "Idem.", "research_line_4": "Idem.", "research_line": "Idem.",
         },
         required_any=["title", "cris_abstract", "cris_keywords"],
         aux_csv=REPO_ROOT / "salidas" / "06_project_results_ground_truth.csv",
@@ -98,6 +118,11 @@ DOMAINS: dict[str, Domain] = {
                           "source_abstract", "palabras_clave", "source_keywords"],
         aux_max_rows=5,
         aux_label="resultado declarado del proyecto",
+        # Fallback, no agregado: el universo minimo ya exige cris_abstract, asi
+        # que esto solo se activa para el puñado de proyectos cuyo abstract es
+        # mas corto que un tuit.
+        aux_primary_columns=["cris_abstract"],
+        aux_min_primary_chars=200,
     ),
     "publications": Domain(
         key="publications",
@@ -186,26 +211,25 @@ def read_source(domain: Domain) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
-_RESEARCH_LINE_COLUMNS = ("research_line_1", "research_line_2", "research_line_3",
-                          "research_line_4", "research_line")
-
-
-def _has_research_line(row: dict) -> bool:
-    return any(clean_value(row.get(c)) for c in _RESEARCH_LINE_COLUMNS)
-
-
 def qualifying_project_ids(rows: list[dict] | None = None) -> set[str]:
     """Universo minimo declarado de PROYECTOS (decision del equipo, no del
     CSV): closed/2010+ ya viene aplicado en el CSV de origen; a eso se suma
-    title + knowledge_area + al menos una linea de investigacion, las tres.
-    knowledge_area se dejo fuera como requisito en una version anterior pero
-    se volvio a pedir explicitamente. 409 de 975 proyectos la cumplen hoy.
+    title + cris_abstract.
+
+    Antes exigia ademas knowledge_area + linea de investigacion (dejaba 409).
+    Se reemplazo por este criterio mas simple cuando un nuevo export de CRIS
+    (2026-09-29) llevo cris_abstract de 0.9% a 66.3% de los 975 proyectos:
+    medido por longitud de texto, los proyectos que calificaban SOLO por
+    knowledge_area+linea (sin abstract) tenian una mediana de 801 caracteres,
+    y los que calificarian solo por abstract (sin esos tags) tenian 1547 --
+    casi el doble. knowledge_area/linea de investigacion eran la mejor senal
+    disponible de "hay contenido real" cuando el abstract estaba casi vacio;
+    ya no lo son. 646 de 975 proyectos cumplen este criterio hoy.
     """
     if rows is None:
         rows = read_source(get("projects"))
     return {clean_value(r.get("project_id")) for r in rows
-            if clean_value(r.get("title")) and clean_value(r.get("knowledge_area"))
-            and _has_research_line(r)}
+            if clean_value(r.get("title")) and clean_value(r.get("cris_abstract"))}
 
 
 def filter_min_requirements(domain: Domain, rows: list[dict]) -> tuple[list[dict], int]:
@@ -220,15 +244,20 @@ def filter_min_requirements(domain: Domain, rows: list[dict]) -> tuple[list[dict
         keep = qualifying_project_ids(rows)
         kept = [r for r in rows if clean_value(r.get("project_id")) in keep]
     elif domain.key == "publications_linked":
-        # Las publicaciones deben tener las tres (title+abstract+keywords) Y
-        # su proyecto padre debe tambien cumplir el universo de proyectos: no
-        # tiene sentido declarar "nuestros proyectos calificados" y luego
-        # contar publicaciones de un proyecto que no calificaria.
-        proj_ok = qualifying_project_ids()
+        # Universo minimo: title + abstract, aplicado directo sobre las 1192
+        # publicaciones declaradas como resultado de un proyecto del universo.
+        # Antes exigia ademas keywords (dejaba 308/300) y que el proyecto
+        # padre TAMBIEN calificara bajo el criterio de projects -- se saco esa
+        # segunda exigencia: la pregunta aqui es "esta publicacion tiene
+        # suficiente texto propio", no "el proyecto que la declaro tambien
+        # califica" (eso acoplaba el universo de publicaciones a un criterio
+        # de otro dominio, sin necesidad). keywords se saco por el mismo
+        # razonamiento que en projects: de las 1192 filas candidatas, keywords
+        # estaba lleno en solo 30.8% (title 71.3%, abstract 45.1%) -- era el
+        # cuello de botella real, no una senal de calidad adicional.
+        # 538 filas (529 tras deduplicar) cumplen title+abstract hoy.
         kept = [r for r in rows
-                if clean_value(r.get("title")) and clean_value(r.get("abstract"))
-                and clean_value(r.get("keywords"))
-                and clean_value(r.get("project_id")) in proj_ok]
+                if clean_value(r.get("title")) and clean_value(r.get("abstract"))]
     else:
         return rows, 0
     return kept, len(rows) - len(kept)
@@ -309,6 +338,10 @@ def to_units(domain: Domain, rows: list[dict], max_chars: int = 0,
             dropped.append({"unit_id": "", "reason": "sin id"})
             continue
         aux_rows = aux.get(unit_id, [])
+        if domain.aux_primary_columns:
+            primary_chars = sum(len(clean_value(row.get(c))) for c in domain.aux_primary_columns)
+            if primary_chars >= domain.aux_min_primary_chars:
+                aux_rows = []  # la fuente primaria ya alcanza: no apilar el fallback
         extra = aux_text(domain, aux_rows) if aux_rows else None
         if domain.required_any and not any(
                 clean_value(row.get(c)) for c in domain.required_any) and not extra:
