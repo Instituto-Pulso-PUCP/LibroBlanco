@@ -133,33 +133,37 @@ Complementos más intuitivos que el índice, y que se reportan junto a él:
 
 Dos corridas, cada una con su propio espacio de temas (no se mezclan ni se
 comparan). Población tras el **universo mínimo declarado** (\S7): proyectos
-con `title` + `knowledge_area` + al menos una línea de investigación,
-publicaciones ligadas con `title` + `abstract` + `keywords` y proyecto padre
-que también califique. El detalle de por qué se llega a esta población —de
-dónde sale cada número del embudo, cuántos caracteres de texto quedó por
-unidad— está en la pestaña **Datos de origen** del atlas publicado, no
-repetido aquí.
+con `title` + `cris_abstract`; publicaciones ligadas con `title` + `abstract`,
+sin exigir que el proyecto que la declaró también califique. El detalle de
+por qué se llega a esta población —de dónde sale cada número del embudo,
+cuántos caracteres de texto quedó por unidad— está en la pestaña **Datos de
+origen** del atlas publicado, no repetido aquí.
 
-| | proyectos (`full-proj-409`) | publicaciones ligadas (`publications_linked-308`) |
+| | proyectos (`full-proj-646`) | publicaciones ligadas (`publications_linked-529`) |
 |---|---:|---:|
-| unidades | 409 | 300 |
-| temas extraídos por el LLM | 1 179 | 866 |
-| temas normalizados | **121** | **85** |
-| umbrales calibrados (líder / fusión) | 0.575 / 0.643 | 0.561 / 0.635 |
-| tamaño de grupo (máx / mediana) | 64 / 7 | 42 / 7 |
-| celdas no nulas · densidad | 3 313 · 6.69 % | 2 414 · 9.47 % |
-| `PC` (normalizado) | 0.4472 (0.4426) | 0.4839 (0.4777) |
-| entropía normalizada | 0.2592 | 0.2534 |
-| temas efectivos por unidad | 2.63 | 2.40 |
-| unidades efectivas por tema | 8.3 | 8.1 |
+| unidades | 646 | 529 |
+| temas extraídos por el LLM | 1 951 | 1 456 |
+| temas normalizados | **136** | **101** |
+| umbrales calibrados (líder / fusión) | 0.570 / 0.631 | 0.555 / 0.623 |
+| tamaño de grupo (máx / mediana) | 80 / 11 | 57 / 10 |
+| celdas no nulas · densidad | 5 261 · 5.99 % | 4 273 · 8.00 % |
+| `PC` (normalizado) | 0.3932 (0.3887) | 0.4665 (0.4612) |
+| entropía normalizada | 0.2743 | 0.2568 |
+| temas efectivos por unidad | 2.96 | 2.53 |
+| unidades efectivas por tema | 12.9 | 12.3 |
 
 Los dos `PC` normalizados caen en la franja informativa (0.2 – 0.8): la
 partición es difusa de verdad, y las dos lecturas dicen cosas distintas.
 
-*(La corrida anterior a este filtro —975 proyectos / 840 publicaciones, 160 /
-136 temas— sigue intacta en RDS como `full-proj-975` /
-`publications_linked-20260924-002153`, por si hace falta comparar antes/después
-del filtro de calidad.)*
+*(Corridas anteriores, intactas en RDS por si hace falta comparar: proyectos
+sin filtro de calidad —975, 160 temas: `full-proj-975`—; proyectos con el
+criterio viejo —409, `title`+`knowledge_area`+línea de investigación, 121
+temas: `full-proj-409`—, reemplazado el 2026-09-29 cuando un nuevo export
+CRIS hizo `cris_abstract` una señal mucho mejor que esos metadatos (ver \S7);
+publicaciones sin filtro —840, 136 temas:
+`publications_linked-20260924-002153`—; publicaciones con el criterio
+intermedio —300, `title`+`abstract`+`keywords`+proyecto-padre-calificaba, 85
+temas: `publications_linked-308`—, reemplazado el 2026-09-30 (ver \S7).)*
 
 ### Por qué no se fija un número de temas
 
@@ -213,29 +217,71 @@ aun así no ser parte del universo si no cumple un mínimo de calidad de dato.
 
 - **Proyectos**: cerrado (`Estado = "5. Cerrado"`) y `year ≥ 2010` (ya
   aplicado en `salidas/01_projects_closed_con_cris.csv`), **y** `title`, **y**
-  `knowledge_area`, **y** al menos una línea de investigación
-  (`research_line_1`..`4` o la homologada). De 1 928 proyectos registrados en
-  PULSO, 975 quedan cerrados/2010+, y de esos, **409** cumplen las tres.
-- **Publicaciones ligadas**: `title`, **y** `abstract`, **y** `keywords`, **y**
-  que el proyecto que la declaró como resultado también cumpla el punto
-  anterior. De 1 192 publicaciones declaradas como resultado de un proyecto
-  del universo, 308 filas cumplen las tres por su propio texto (351 sin exigir
-  el proyecto padre — la exigencia extra cuesta poco porque las publicaciones
-  tienden a venir de los proyectos mejor documentados), y tras deduplicar por
-  publicación (8 son resultado de dos proyectos a la vez) quedan **300**
-  distintas.
+  `cris_abstract`. De 1 928 proyectos registrados en PULSO, 975 quedan
+  cerrados/2010+, y de esos, **646** cumplen las dos.
 
-Implementación: `lb_domains.qualifying_project_ids()` /
-`lb_domains.filter_min_requirements()`, aplicado en la etapa 01. El embudo
-completo, con la distribución de caracteres por unidad resultante, está en la
-pestaña **Datos de origen** del atlas.
+  Este criterio reemplazó, el 2026-09-29, al que exigía `title` +
+  `knowledge_area` + al menos una línea de investigación (dejaba 409). El
+  motivo: un nuevo export CRIS (`datos/ProyectosPUCPCRIS-20260929.csv`) llevó
+  la cobertura de `cris_abstract` de 0.9 % a 66.3 % de los 975 proyectos —con
+  el export anterior, exigir abstract habría dejado casi nada, así que
+  `knowledge_area`/línea de investigación eran la mejor señal disponible de
+  "hay contenido real". Medido por longitud de texto tras el cambio: los
+  proyectos que calificaban *solo* por `knowledge_area`+línea (sin abstract)
+  tenían una mediana de 801 caracteres; los que calificarían *solo* por
+  abstract (sin esos metadatos) tenían 1 547 — casi el doble. El texto
+  embebido también se redujo a `title` + `cris_abstract` + `cris_keywords`:
+  con el abstract presente, `knowledge_area` y las líneas de investigación
+  aportaban poco texto nuevo (siguen guardadas como metadato/filtro, no como
+  texto embebido). `cris_fos` y `cris_ocde_subject` quedaron excluidos del
+  embedding: el primero por discriminar casi nada (6 valores posibles en toda
+  la universidad); el segundo porque son URIs (`.../ford#5.07.03`), no texto
+  — `clean_value()` las descarta en cualquier export, nunca aportaron un
+  carácter.
+- **Publicaciones ligadas**: `title` **y** `abstract`, aplicado directo sobre
+  las 1 192 publicaciones declaradas como resultado de un proyecto del
+  universo. De esas, 538 filas cumplían las dos por su propio texto, y tras
+  deduplicar por publicación (9 comparten `publication_id` con otra)
+  quedaban **529** distintas.
+
+  Hasta el 2026-09-29 (`publications_linked-308`) el criterio era más
+  estricto en dos sentidos, ambos revertidos el 2026-09-30: (1) exigía
+  además `keywords` — de las 1 192 filas candidatas, `title` estaba lleno en
+  71.3%, `abstract` en 45.1% y `keywords` en solo 30.8%; medido así,
+  `keywords` era el cuello de botella real, no una señal de calidad
+  adicional. (2) exigía que el proyecto que declaró la publicación también
+  calificara bajo el criterio de `projects` vigente en ese momento
+  (`title`+`knowledge_area`+línea de investigación, 409 proyectos) — esto
+  acoplaba el universo de publicaciones a un criterio de otro dominio sin
+  necesidad real: la pregunta relevante para esta unidad es si tiene
+  suficiente texto propio, no si el proyecto que la declaró pasa hoy un
+  umbral pensado para otro análisis. Con las dos exigencias, quedaban 308
+  filas / 300 distintas (de esas 308, 351 habrían pasado sin exigir el
+  proyecto padre). Sacar ambas casi duplicó la población: 300 → 529.
+
+Implementación: `lb_domains.filter_min_requirements()` (para `projects`
+delega en `qualifying_project_ids()`; `publications_linked` ya no depende de
+esa función — su gate es directo sobre sus propias columnas), aplicado en la
+etapa 01. El embudo completo, con la distribución de caracteres por unidad
+resultante, está en la pestaña **Datos de origen** del atlas.
 
 Al cambiar el universo se reusan, para las unidades que sobreviven, la
 extracción por LLM y el embedding de texto completo ya calculados en la
 corrida anterior (`scripts/pipeline_temas/seed_from_run.py`): son deterministas
 en función del texto, no del resto del corpus, así que no hace falta volver a
 pagarlos. Solo se recalculan la normalización (agrupamiento, que sí depende de
-qué otras unidades hay) y la cuantificación.
+qué otras unidades hay) y la cuantificación. Esto vale cuando cambia *qué*
+unidades entran pero no *su texto*, y tal como está escrito el script exige
+que la corrida VIEJA sea superconjunto de la nueva (población que se achica o
+se reordena, no que crece). No aplicó para ninguno de los dos cambios del
+2026-09-29/30: en `projects` porque además cambió el texto embebido en sí
+(nuevo `cris_abstract`, columnas de metadato removidas); en
+`publications_linked` porque, aunque el texto de las 300 unidades que
+sobreviven no cambió, la corrida nueva (529) es superconjunto de la vieja
+(300), no al revés — el caso que este script no cubre. Se reextrajo desde
+cero en ambos casos: `full-proj-646` (~USD 4.74) y `publications_linked-529`
+(~USD 3.38); ninguno de los dos es costoso a esta escala, así que no se
+invirtió en extender el script para este caso.
 
 ## 8. Cruce con los Objetivos Nacionales (PEDN 2050 / CEPLAN)
 
@@ -257,12 +303,12 @@ específica), la Temática y el ON que implica, el score contra el centroide
 del ON directamente, y el top-3. Antes de confiar en el ranking se valida que
 los scores no estén comprimidos (ya pasó con otro modelo, en otro corpus:
 `salidas/topics/policy_alignment_model_comparison_summary.md`, ahora
-retirado) — en esta corrida el rango es 0.45–0.77, comparable al de la
+retirado) — en esta corrida el rango es 0.46–0.78, comparable al de la
 similitud interna del propio agrupamiento, así que el ranking es señal real.
 
 Un hallazgo a tener en cuenta al reportar: el ON implicado por la mejor
-sub-temática solo coincide con el ON de mayor similitud directa en 72/121
-temas de proyectos (59 %) y 58/85 de publicaciones (68 %) — las dos lecturas
+sub-temática solo coincide con el ON de mayor similitud directa en 92/136
+temas de proyectos (68 %) y 59/101 de publicaciones (58 %) — las dos lecturas
 (fina y gruesa) genuinamente discrepan en cerca de un tercio de los casos; los
 reportes (`06_ceplan_alignment.json` / `reporte_ceplan_alignment.md` por
 dominio) marcan cada discrepancia en vez de resolverla en silencio.

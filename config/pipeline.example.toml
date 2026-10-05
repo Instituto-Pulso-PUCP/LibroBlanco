@@ -160,3 +160,26 @@ similarity_power = 3.0
 contribution_mode = "share"
 # Celdas por debajo de esta contencion no se guardan (ruido de cola larga).
 min_containment = 0.01
+
+# ---------------------------------------------------------------------------
+# Cruce unidad <-> sub-tematica del PEDN 2050 (scripts/analysis/ceplan_units.py).
+# Calibracion y eleccion del modelo: EXPERIMENTS.md §6.
+# ---------------------------------------------------------------------------
+[ceplan]
+# Similitud minima (max de es/en) para proponer una sub-tematica como candidata.
+floor = 0.40
+max_candidates = 8
+# Via inversa: las N unidades mas similares a cada sub-tematica tambien la
+# reciben como candidata (si no, las de linea base baja nunca se evaluan).
+reverse_top_m = 10
+# Maximo de candidatas que la via inversa suma a una misma unidad.
+reverse_max_per_unit = 6
+# Sub-tematicas por unidad que entran en la cuantificacion (grado >= 1).
+top_n = 5
+# Verificador elegido por el benchmark contra el gold humano (EXPERIMENTS.md §6.3).
+judge_model_id = "us.meta.llama4-maverick-17b-instruct-v1:0"
+judge_workers = 4
+weight_grade_1 = 0.5
+weight_grade_2 = 1.0
+# Sub-tematica 'desarrollada' con al menos N unidades de grado 2.
+developed_min_grade2 = 3

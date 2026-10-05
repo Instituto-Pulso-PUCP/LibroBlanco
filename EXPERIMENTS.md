@@ -3,7 +3,7 @@
 Living reference for the embeddings/clustering work. Updated as runs complete —
 see "Run history" at the bottom for traceability across changes.
 
-**Status as of this update:** all three experiments are current/final —
+**Status as of this update:** all three experiments are current/final (plus the CEPLAN sub-temática linking work in §6) —
 projects (975 rows, CRIS-merged), publications (13,995 rows, full catalog,
 post-OpenAlex-backfill), and publications restricted to project-linked
 declared results (850/1,192 rows). See §5.
@@ -263,6 +263,134 @@ contaminated by the URL bug.
 
 ---
 
+## 6. CEPLAN sub-temáticas ↔ projects/publications (2026-10-04/05)
+
+Goal: answer "which PEDN 2050 sub-temáticas does this project/publication
+develop?" (top 5 with a minimum threshold) and the reverse ("which units
+develop this sub-temática?", including which ones nobody covers). This
+replaces the topic ↔ sub-temática view (`ceplan_alignment.py`), judged
+unnecessary. Universe: `full-proj-646` (646 projects) and
+`publications_linked-529` (529 publications); taxonomy: `Líneas de Inv.`
+sheet, 126 sub-temáticas on 4 ON.
+
+Design (agreed): **embeddings propose candidates, an LLM confirms each one**
+with a grade 0/1/2 (0 = no real relation, 1 = tangential/indirect, 2 =
+clearly develops it or contributes directly useful knowledge). Grades ≥ 1
+are kept and weighted into containment/contribution with `lb_membership`,
+as with topics.
+
+### 6.1 Embedding calibration (Cohere multilingual v3, same model as the topics)
+
+- **Embeddings alone are not enough.** Unit × sub-temática cosine scores are
+  compressed (projects: median 0.50, a unit's top-5 within ~0.04 of each
+  other). A few sub-temáticas behave as hubs that score moderately against
+  everything ("Política monetaria", "Gestión Territorial", "Vigilancia
+  ambiental", "Movilidad Urbana"): pure-math projects land on them. An
+  LLM-labelled sample (400 pairs) gave AUC 0.76 for the raw score, with
+  precision stuck at 60–70% at any floor. A per-sub-temática z-score (hub
+  correction) did no better (AUC 0.76) and dropped real matches.
+- **Language penalty.** English texts score ~0.15 lower than Spanish ones
+  against the Spanish CEPLAN text with equivalent content (345 of 529
+  publications are in English). Embedding an English translation of each
+  sub-temática (LLM-translated once, cached in
+  `salidas/topics/ceplan/subtematicas_en.json`, `lb_ceplan.translate_texts`)
+  and taking max(es, en) only partly closes it (median top score of English
+  publications 0.451 → 0.470); the rest is real content (basic science with
+  no policy link).
+- **Floor.** Below ~0.45 almost nothing is related per the LLM labels (5%);
+  the human labels (§6.2) found relations down to ~0.40, almost all
+  tangential (37% of pairs below 0.50 related, only 7% graded 2). Decision:
+  **floor 0.40, up to 8 candidates per unit**, and let the LLM filter.
+
+### 6.2 LLM judge benchmark (`scripts/analysis/ceplan_judge_benchmark.py`)
+
+Same prompt for every model (`SYSTEM` in the script): unit text (≤ 3 000
+chars) + its 5 candidate sub-temáticas → JSON array of grades. 80 units (40
+projects, 40 publications, stratified across score levels) × 5 = 400 pairs.
+Reference: Claude Sonnet 5 (the pipeline's model, labelled during
+calibration). Non-Claude models through the Bedrock Converse API
+(`lb_aws.BedrockClient.converse`). Prices: AWS public price list, on-demand
+us-east-1, published 2026-09-30/10-03 (`PRICES` in the script). Total cost of
+the benchmark ≈ USD 0.30.
+
+**Human gold set:** 100 of the 400 pairs (20 units: 10 projects, 10
+publications, spread across score levels), graded by one annotator (the
+project lead) without seeing model grades or scores, through a private
+claude.ai artifact; merged into `salidas/topics/ceplan/benchmark/gold_humano.csv`.
+Distribution: 36 × 0, 32 × 1, 32 × 2 (64% related).
+
+| Model | Bedrock ID | κ vs Sonnet 5 (400) | κ vs human (100) | 95% CI, unit bootstrap | κ on "= 2" vs human | % marked related | Invalid answers | USD / 1 000 units |
+|---|---|---:|---:|---|---:|---:|---:|---:|
+| Sonnet 5 | `us.anthropic.claude-sonnet-5` | — | 0.51 | 0.33–0.68 | 0.35 | 52% | — | ~2.66 (est.) |
+| Haiku 4.5 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | 0.63 | **0.61** | 0.35–0.81 | 0.43 | 64% | 0% | 2.26 |
+| **Llama 4 Maverick** | `us.meta.llama4-maverick-17b-instruct-v1:0` | 0.62 | 0.59 | 0.37–0.76 | **0.48** | 72% | 0% | **0.29** |
+| Nova Pro | `us.amazon.nova-pro-v1:0` | 0.73 | 0.56 | 0.37–0.73 | 0.39 | 57% | 2.5% | 0.52 |
+| gpt-oss-120b | `openai.gpt-oss-120b-1:0` | 0.60 | 0.50 | 0.23–0.71 | 0.39 | 70% | 0% | 0.28 |
+| Qwen3 32B | `qwen.qwen3-32b-v1:0` | 0.72 | 0.50 | 0.27–0.69 | 0.33 | 51% | 0% | 0.11 |
+| GLM 4.7 | `zai.glm-4.7` | 0.71 | 0.44 | 0.26–0.59 | 0.40 | 45% | 0% | 0.40 |
+
+κ = Cohen's kappa on related (grade ≥ 1) vs not, unless noted. Percent
+"marked related" is measured on the 100 gold pairs.
+
+Findings:
+- **Agreement with Sonnet is not accuracy.** The models that agree most with
+  Sonnet (Nova Pro, Qwen3, GLM) are not the ones that agree most with the
+  human. All model pairs agree with each other at κ 0.50–0.73, so ~0.7 is
+  the inter-LLM ceiling on this task.
+- **The models are stricter than the human.** Most disagreements are pairs
+  the human graded 1 (tangential) and the model graded 0 (Sonnet: 16 of 32;
+  Qwen3: 15). Models confirm the human's 0s well (Sonnet 30 of 36).
+- **Sonnet 5 is never better than the cheap models against the human**: it
+  is the best model in only 2% of unit-bootstrap resamples, and Llama 4
+  Maverick beats it in 77%.
+- **The ranking among the cheap models is not settled by this sample**: best
+  model across resamples is Haiku 47%, Llama 31%, Nova Pro 13%; and it flips
+  by domain (projects: Haiku 0.75, Qwen3 0.65, Llama 0.56; publications:
+  Llama 0.62, Haiku 0.47, Qwen3 0.33).
+- Haiku 4.5 writes explanations despite the instruction (≈ 270 output
+  tokens/unit), so it costs about as much as Sonnet. Nova Pro sometimes adds
+  `//` comments inside the JSON array.
+- A 7-model majority vote reaches κ 0.62 vs the human — no gain over Llama
+  alone at 7× the cost.
+
+### 6.3 Decision
+
+**Llama 4 Maverick** (`us.meta.llama4-maverick-17b-instruct-v1:0`) as the
+verifier, with floor 0.40 and up to 8 candidates per unit. Reasons: it sits
+in the top group against the human (κ 0.59), it has the best agreement on
+clear relations (κ 0.48 on "= 2", and it never graded 0 a pair the human
+graded 2: 0 of 32), its leniency is close to the human's, and the full run
+costs ≈ USD 0.30 (vs ≈ 2.7 with Sonnet 5).
+
+### 6.4 Limits of the evidence and required validation
+
+The gold set is enough to drop Sonnet 5 for a cheaper model, **not** to
+claim Llama is the best cheap model, and **not** to report the pipeline's
+precision:
+- 20 units and 52 of the 126 sub-temáticas; one annotator (no human-human
+  agreement measured, so the human ceiling is unknown);
+- it only contains each unit's top 5 by score (the final pipeline uses up to
+  8 with floor 0.40; only 18 gold pairs score below 0.45).
+
+**Required before publishing results:** grade a random sample of the
+production links (~30 units balanced across domains, ~100–150 links) with
+the same criterion, to report precision on the real output and check for a
+domain where Llama fails (rerunning with Haiku 4.5 or Nova Pro costs cents).
+Optional: a second annotator on ~40 of the 100 gold pairs, to measure the
+human ceiling.
+
+Side finding: the `us.` inference profile for Sonnet 5 bills the regional
+rate ($2.20 / $11 per M tokens); `global.anthropic.claude-sonnet-5` bills
+$2 / $10. Switching `bedrock.llm_model_id` saves 10% on future topic
+extractions.
+
+Files: `scripts/analysis/ceplan_judge_benchmark.py` (gold / run / report),
+`scripts/analysis/ceplan_gold_label.py` (terminal labelling alternative),
+`salidas/topics/ceplan/benchmark/` (`unidades.jsonl`, `gold_humano.csv`,
+`respuestas/<model>.jsonl`, `reporte.md`).
+
+---
+
 ## Run history
 
 | # | Dataset | Rows | Text columns | Registry | Result | Status |
@@ -275,3 +403,5 @@ contaminated by the URL bug.
 | 6 | publications | 13,995 | same as #4 | 7 models | Scopus URLs cleaned, WOS/RI backfilled (40.1% real abstract) | superseded |
 | 7 | publications | 13,995 | same as #4 | 7 models | + OpenAlex backfill (73.2% real abstract); minilm+HDBSCAN 0.287 (jina 0.252) | **current** |
 | 8 | publications, project-linked declared results | 850 (of 1,192) | same as #4, master text where matched else ground-truth columns | 7 models | jina+HDBSCAN 0.363 (minilm 0.205) | **current** |
+| 9 | CEPLAN calibration: projects + publications_linked × 126 sub-temáticas | 646 + 529 units | title, cris_abstract, cris_keywords / title, abstract (unit embeddings) vs sub-temática + temática + OE/AE text, es + en | Cohere multilingual v3 | AUC 0.76 vs LLM labels; floor 0.40, top-8 | **current** |
+| 10 | CEPLAN LLM-judge benchmark (§6.2) | 400 pairs (100 human-graded) | unit text ≤ 3 000 chars + 5 candidates | 7 LLMs on Bedrock | Llama 4 Maverick chosen (κ 0.59 vs human, USD 0.29 / 1 000 units) | **current** |

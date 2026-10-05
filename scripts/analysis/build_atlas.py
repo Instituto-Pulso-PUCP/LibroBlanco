@@ -153,29 +153,36 @@ def examples(cfg, store, rows, topics, units, raw_topics):
     return {"main": main_cell, "big": describe(big), "small": describe(small)}
 
 
-def attach_ceplan(domain: str, run_id: str, topics: dict) -> None:
-    """Cuelga, en cada tema, su mejor calce con el PEDN 2050 / Objetivos
-    Nacionales (scripts/analysis/ceplan_alignment.py), si ya se corrió para
-    este run. Sin ese archivo, la pestaña de Objetivos Nacionales sale vacia
-    en vez de romperse -- el cruce es un cruce aparte, no una etapa obligatoria
-    del pipeline."""
-    path = ROOT / "salidas" / "topics" / domain / run_id / "06_ceplan_alignment.json"
+def ceplan_block(domain: str, run_id: str) -> dict | None:
+    """Cruce unidad <-> sub-tematica del PEDN 2050 (scripts/analysis/ceplan_units.py),
+    si ya se corrio para este run. Sin ese archivo la pestaña de Objetivos
+    Nacionales muestra un aviso en vez de romperse: el cruce es aparte, no una
+    etapa obligatoria del pipeline.
+
+    Formato compacto: ``subs[sid] = {l, t, o, cov, n, n2, eq}`` y
+    ``units[uid] = [[sid, grado, contencion, contribucion], ...]`` con todos
+    los vinculos confirmados ordenados por contencion; ``top`` dice cuantos se
+    listan por unidad."""
+    path = ROOT / "salidas" / "topics" / domain / run_id / "07_ceplan_units.json"
     if not path.exists():
-        return
-    data = json.loads(path.read_text(encoding="utf-8"))
-    for row in data.get("rows", []):
-        tid = row["topic_id"]
-        if tid not in topics:
-            continue
-        entry = {"i": row["best_on_via_subtema"], "l": row["best_on_label"],
-                 "t": row["best_tema"], "s": row["best_subtema"],
-                 "sc": row["score_subtema"], "di": row["on_direct_id"],
-                 "dl": row["on_direct_label"], "dsc": row["score_on_direct"],
-                 "ok": row["agrees_direct_vs_subtema"]}
-        if row.get("secondary_best_on"):
-            entry.update({"si": row["secondary_best_on"], "ss": row["secondary_best_subtema"],
-                         "ssc": row["secondary_score"]})
-        topics[tid]["on"] = entry
+        return None
+    p = json.loads(path.read_text(encoding="utf-8"))
+    subs = {sid: {"l": v["label"], "t": v["tema"], "o": v["on"], "cov": v["coverage"],
+                  "n": v["num_units"], "n2": v["num_grade2"],
+                  "eq": round(v["units_equivalent"], 2)}
+            for sid, v in p["subtematicas"].items()}
+    units, status = {}, {}
+    for uid, u in p["units"].items():
+        status[uid] = u["status"]
+        if u["subs"]:
+            units[uid] = [[s["sub_id"], s["grade"], s["containment"], s["contribution"]]
+                          for s in u["subs"]]
+    pr = p["params"]
+    return {"subs": subs, "units": units, "status": status, "on": p["on_labels"],
+            "byOn": {k: round(v, 2) for k, v in p["by_on"].items()},
+            "sc": p["status_counts"], "links": p["links_by_grade"],
+            "top": pr["top_n"], "model": pr["judge_model_id"], "floor": pr["floor"],
+            "minG2": pr["developed_min_grade2"]}
 
 
 def collect(cfg, domain: str, run_id: str) -> dict:
@@ -207,7 +214,6 @@ def collect(cfg, domain: str, run_id: str) -> dict:
     cells.sort(key=lambda c: (c[0], -c[2]))
     side = partition.get("unit_side") or {}
     label, noun = NOUNS.get(domain, (domain, "unidad"))
-    attach_ceplan(domain, run_id, topics)
     return {"run": run_id, "label": label, "noun": noun,
             "topics": topics, "units": units, "cells": cells,
             "ex": examples(cfg, store, rows, topics, units, raw_topics),
@@ -217,21 +223,45 @@ def collect(cfg, domain: str, run_id: str) -> dict:
             "mt": round(partition.get("mean_effective_topics_per_unit") or 0, 2),
             "mu": round(partition.get("mean_effective_units_per_topic") or 0, 1),
             "nu": partition.get("num_units_in_partition") or len(units),
-            "nt": partition.get("num_topics_in_partition") or len(topics)}
+            "nt": partition.get("num_topics_in_partition") or len(topics),
+            "ceplan": ceplan_block(domain, run_id)}
 
 
-def coverage(domain: str) -> dict:
+def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
     """Tasas de llenado de las columnas embebidas, para la pestaña de metodología.
 
     Se calcula sobre la poblacion YA filtrada por el universo minimo
     declarado (lb_domains.filter_min_requirements): antes de que ese filtro
     existiera esto se calculaba sobre TODAS las filas del CSV de origen, asi
     que las tasas de llenado mostradas no correspondian a la corrida real.
+
+    Si se pasa ``run_unit_ids`` (los unit_id que de verdad estan en la
+    corrida que se esta mostrando), se usa eso en vez de recalcular con la
+    definicion VIGENTE de ``qualifying_project_ids()`` -- esa definicion
+    cambia con el tiempo (p.ej. el cambio de criterio de proyectos en
+    2026-09-29 movio, de paso, cuantas publicaciones_linked "califican" hoy,
+    aunque la corrida `publications_linked-308` ya construida no cambio de
+    unidades). Sin esto, un dominio que no se vuelve a correr podria mostrar
+    una tabla de cobertura que ya no corresponde a su propia corrida.
     """
     spec = lb_domains.get(domain)
     raw_rows = lb_domains.read_source(spec)
-    rows, dropped_min_req = lb_domains.filter_min_requirements(spec, raw_rows)
+    if run_unit_ids is not None:
+        rows = [r for r in raw_rows if lb_domains.clean_value(r.get(spec.id_column)) in run_unit_ids]
+        dropped_min_req = len(raw_rows) - len(rows)
+    else:
+        rows, dropped_min_req = lb_domains.filter_min_requirements(spec, raw_rows)
     units, dropped = lb_domains.to_units(spec, rows, 6000)
+    if run_unit_ids is not None:
+        # to_units() no deduplica por unit_id (eso lo hace el upsert a la
+        # tabla `units`, con (dominio, unit_id) como llave); sin este paso
+        # las filas de origen con id duplicado (p.ej. una publicacion
+        # declarada por dos proyectos) se contarian dos veces aqui aunque en
+        # la corrida real cuenten una sola.
+        dedup = {}
+        for u in units:
+            dedup[u["unit_id"]] = u
+        units = list(dedup.values())
     report = lb_coverage.build(spec, rows, units, dropped)
     cols = [{"n": c["column_name"], "f": round(c["fill_rate"], 4),
              "r": c["rows_filled"], "aux": c["column_name"].startswith("aux:")}
@@ -252,43 +282,30 @@ def provenance_notes(domain: str) -> dict:
     if domain == "projects":
         return {
             "steps": [
-                {"n": 1928, "label": "Proyectos registrados en PULSO/CRIS",
-                 "note": "hoja PROYECTOS de datos/informacion_proyecto_pulso.xlsx"},
-                {"n": 975, "label": "Cerrados (Estado = \"5. Cerrado\") y de 2010 en adelante",
-                 "note": "filtro fijo del equipo: solo proyectos concluidos, en la ventana "
-                         "temporal declarada"},
-                {"n": 409, "label": "Cumplen el universo mínimo declarado",
-                 "note": "title + área de conocimiento + al menos una línea de investigación, "
-                         "las tres. Decisión del equipo: un proyecto con solo título no da "
-                         "suficiente señal para un análisis semántico serio."},
+                {"n": 1928, "label": "Proyectos registrados en PULSO y CRIS",
+                 "note": "hoja PROYECTOS del Excel de PULSO"},
+                {"n": 975, "label": "Cerrados y del 2010 en adelante",
+                 "note": "solo proyectos concluidos, en la ventana de años que usa el equipo"},
+                {"n": 646, "label": "Tienen título y resumen de CRIS",
+                 "note": "un proyecto con solo título no alcanza para un análisis de texto "
+                         "serio"},
             ],
-            "why": "Se probaron dos versiones antes de fijar esta: exigir título + línea de "
-                   "investigación (cualquiera de las dos, sin exigir área de conocimiento) "
-                   "dejaba 493; exigir las tres a la vez, como se hace aquí, deja 409. La "
-                   "diferencia es chica porque en este registro casi todo proyecto con área "
-                   "de conocimiento también tiene línea de investigación (se solapan), así "
-                   "que la exigencia extra no penaliza dos veces lo mismo.",
+            "why": "",
         }
     if domain == "publications_linked":
         return {
             "steps": [
-                {"n": 1192, "label": "Publicaciones declaradas como resultado de un proyecto "
-                                     "del universo",
-                 "note": "salidas/07_publications_linked_full.csv"},
-                {"n": 308, "label": "Cumplen título + resumen + palabras clave, y su proyecto "
-                                    "padre también califica",
-                 "note": "mismo criterio de calidad que projects, extendido: no tiene sentido "
-                         "declarar \"nuestros proyectos calificados\" y contar publicaciones "
-                         "de un proyecto que no calificaría."},
-                {"n": 300, "label": "Publicaciones distintas tras deduplicar",
-                 "note": "8 publicaciones son resultado declarado de DOS proyectos a la vez "
-                         "(comparten publication_id con project_id distinto); cuentan una "
-                         "sola vez."},
+                {"n": 1192, "label": "Publicaciones que un proyecto del universo declaró "
+                                     "como su resultado",
+                 "note": "archivo publications_linked_full"},
+                {"n": 538, "label": "Tienen título y resumen",
+                 "note": "una publicación con solo título no alcanza para un análisis de "
+                         "texto serio"},
+                {"n": 529, "label": "Publicaciones distintas tras quitar duplicados",
+                 "note": "9 publicaciones estaban declaradas por más de un proyecto y se "
+                         "cuentan una sola vez"},
             ],
-            "why": "De las 308 filas que pasan el filtro por su propio texto, 351 pasarían "
-                   "sin exigir que el proyecto padre también califique -- la exigencia extra "
-                   "cuesta poco (43 filas) porque las publicaciones tienden a venir "
-                   "precisamente de los proyectos mejor documentados.",
+            "why": "",
         }
     return {"steps": [], "why": ""}
 
@@ -308,7 +325,7 @@ def main():
         if not run_id:
             raise SystemExit(f"--run mal formado: {pair!r}. Formato: dominio=run_id")
         data[domain] = collect(cfg, domain, run_id)
-        method[domain] = coverage(domain)
+        method[domain] = coverage(domain, set(data[domain]["units"].keys()))
         print(f"  {domain:22s} {len(data[domain]['topics'])} temas · "
               f"{len(data[domain]['units'])} unidades · {len(data[domain]['cells']):,} celdas")
 

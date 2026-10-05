@@ -25,6 +25,7 @@ aparte, no entran en el cruce con ON.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -145,6 +146,47 @@ def build_taxonomy() -> dict:
     secondary_tree, _ = to_tree(secondary_rows, with_enrichment=False)
 
     return {"on": on_tree, "excluded_categories": excluded, "secondary": secondary_tree}
+
+
+TRANSLATION_CACHE = REPO_ROOT / "salidas" / "topics" / "ceplan" / "subtematicas_en.json"
+
+_TRANSLATE_SYSTEM = (
+    "Traduces al ingles textos de planificacion publica peruana (PEDN 2050, CEPLAN). "
+    "Traduccion fiel y natural, sin resumir ni agregar nada. Responde SOLO con un "
+    "arreglo JSON de strings, uno por texto de entrada, en el mismo orden.")
+
+
+def translate_texts(llm, texts: list[str], batch_size: int = 15) -> dict[str, str]:
+    """Traduce al ingles los textos de sub-tematica, con cache en disco.
+
+    Por que hace falta: Cohere multilingual v3 da similitudes ~0.15 mas bajas
+    entre un texto en ingles y uno en espanol que entre dos del mismo idioma,
+    con el mismo contenido. CEPLAN esta en espanol y ~2/3 de las publicaciones
+    ligadas en ingles, asi que un piso absoluto de similitud las marcaria como
+    "sin relacion" solo por el idioma. Con una version en ingles de cada
+    sub-tematica se toma la mejor de las dos similitudes (ver
+    scripts/analysis/ceplan_units.py). La cache se indexa por el texto en
+    espanol: si CEPLAN cambia una sub-tematica, solo esa se retraduce.
+    """
+    cache = {}
+    if TRANSLATION_CACHE.exists():
+        cache = json.loads(TRANSLATION_CACHE.read_text(encoding="utf-8"))
+    pending = [t for t in dict.fromkeys(texts) if t not in cache]
+    for start in range(0, len(pending), batch_size):
+        chunk = pending[start:start + batch_size]
+        raw = llm.complete(_TRANSLATE_SYSTEM, json.dumps(chunk, ensure_ascii=False),
+                           max_tokens=8000)
+        raw = raw.strip()
+        raw = raw[raw.find("["):raw.rfind("]") + 1]
+        out = json.loads(raw)
+        if len(out) != len(chunk):
+            raise RuntimeError(f"La traduccion devolvio {len(out)} textos, no {len(chunk)}")
+        cache.update(zip(chunk, out))
+        TRANSLATION_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        TRANSLATION_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1),
+                                     encoding="utf-8")
+        print(f"  traducidas {min(start + batch_size, len(pending))}/{len(pending)}")
+    return {t: cache[t] for t in texts}
 
 
 if __name__ == "__main__":

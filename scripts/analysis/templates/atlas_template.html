@@ -133,7 +133,7 @@ td.k .track i{background:var(--contrib)} td.c .track i{background:var(--contain)
 .method h3{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
   font-weight:600;margin:28px 0 10px}
 .method h3:first-of-type{margin-top:18px}
-.method p{margin:0 0 11px;max-width:70ch;color:var(--ink-2);font-size:14.3px}
+.method p{margin:0 0 11px;color:var(--ink-2);font-size:14.3px}
 .method p b,.method li b{color:var(--ink)}
 .flow{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;
   overflow:hidden;grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
@@ -193,6 +193,39 @@ td.k .track i{background:var(--contrib)} td.c .track i{background:var(--contain)
 th.mixnum{text-align:right}
 .zero{color:var(--ink-3)}
 .calc-step .warnline{font-size:12.4px;color:var(--ink-3);margin-top:8px}
+/* --- objetivos nacionales (PEDN 2050) --- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:4px 0 16px}
+.seg button{appearance:none;border:0;background:var(--surface);color:var(--ink-2);font:inherit;font-size:13.5px;
+  font-weight:500;padding:7px 14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+.seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.pill{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;border-radius:4px;
+  padding:1px 7px;white-space:nowrap;border:1px solid transparent}
+.pill.dev,.pill.g2{background:var(--contain-soft);color:var(--contain)}
+.pill.weak{background:var(--contrib-soft);color:var(--contrib)}
+.pill.none,.pill.g1{background:transparent;color:var(--ink-3);border-color:var(--line)}
+.on-block{margin:22px 0 0}
+.on-block>h4{font-family:Spectral,Georgia,serif;font-size:18px;font-weight:600;margin:0 0 2px;line-height:1.25;text-wrap:balance}
+.on-block>.on-sum{font-size:12.5px;color:var(--ink-3);margin:0 0 10px}
+.tema-h{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;margin:14px 0 6px}
+details.subrow{border:1px solid var(--line);border-radius:8px;margin:0 0 6px;background:var(--surface)}
+details.subrow[open]{background:var(--surface-2)}
+details.subrow>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto auto;
+  gap:6px 14px;align-items:center;padding:9px 13px}
+details.subrow>summary::-webkit-details-marker{display:none}
+details.subrow>summary:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;border-radius:8px}
+details.subrow>summary .nm{font-size:14px;min-width:0}
+details.subrow>summary .nm::before{content:"▸";display:inline-block;width:14px;color:var(--ink-3);transition:transform .15s}
+details.subrow[open]>summary .nm::before{transform:rotate(90deg)}
+details.subrow>summary .ct{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+@media (max-width:560px){ details.subrow>summary{grid-template-columns:minmax(0,1fr) auto}
+  details.subrow>summary .ct{grid-column:1 / -1;text-align:left;padding-left:14px} }
+details.subrow .inner{padding:0 13px 12px}
+details.subrow .inner .tablewrap{background:var(--surface)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:13px;color:var(--ink-2)}
+.filters label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-3);font-size:12.5px}
 footer p{margin:0 0 6px;max-width:78ch}
 @media (prefers-reduced-motion:no-preference){ .track i{transition:width .18s ease} }
@@ -428,19 +461,19 @@ footer p{margin:0 0 6px;max-width:78ch}
  
 
     h.push('<h3>De dónde salen los nombres y descripciones de los temas</h3>');
-    h.push('<p>Los escribe el LLM en la etapa 03, a partir de los temas extraídos que el agrupamiento ' +
-           'reunió en cada grupo. <b>No provienen de ningún documento de origen</b>: son una síntesis ' +
-           'de los temas miembros, no una cita. El LLM <b>nombra</b> el grupo; no decide quién entra ' +
-           'en él, eso ya lo resolvió la similitud coseno.</p>');
-
-    h.push('<p class="note" style="margin:-4px 0 18px">De dónde sale cada dato, cuántas filas ' +
-           'se descartaron y con qué texto quedó cada unidad: pestaña <b>Datos de origen</b>.</p>');
+    h.push('<p>Los escribe el LLM en la etapa 03, a partir de los temas extraídos que el ' +
+           'agrupamiento ya reunió en cada grupo, y no provienen de ningún documento de origen, ' +
+           'sino que son una síntesis de los temas miembros, no una cita. El LLM se limita a ' +
+           'nombrar el grupo, no decide quién entra en él, eso ya lo resolvió la similitud ' +
+           'coseno. Cómo sale cada dato de origen, cuántas filas se descartaron y con qué texto ' +
+           'quedó cada unidad se explica en la pestaña <b>Datos de origen</b>.</p>');
 
     h.push('<h3>Modelos</h3>');
-    h.push('<p>Extracción y nombrado: <code>Claude Sonnet 5</code> en Amazon Bedrock, temperatura ' +
-           'no aplicable (eliminada en este modelo), esfuerzo <code>low</code>. Embeddings: ' +
-           '<code>cohere.embed-multilingual-v3</code>, 1024 dimensiones, textos de más de 2048 ' +
-           'caracteres troceados y promediados. Los vectores se guardan en PostgreSQL con pgvector.</p>');
+    h.push('<p>La extracción y el nombrado corren sobre <code>Claude Sonnet 5</code> en Amazon ' +
+           'Bedrock, con esfuerzo <code>low</code> (este modelo ya no usa temperatura). Los ' +
+           'embeddings salen de <code>cohere.embed-multilingual-v3</code>, con 1024 dimensiones, ' +
+           'troceando y promediando los textos de más de 2048 caracteres, y los vectores quedan ' +
+           'guardados en PostgreSQL con pgvector.</p>');
     box.innerHTML = h.join('');
   }
 
@@ -450,11 +483,10 @@ footer p{margin:0 0 6px;max-width:78ch}
     box.dataset.done = '1';
     var h = [];
     h.push('<h2>De dónde vienen los datos</h2>');
-    h.push('<p>Antes de cualquier tema o porcentaje, cada universo pasó por un embudo de ' +
-           'calidad: de todo lo que existe en los registros de la universidad, solo una parte ' +
-           'tenía texto propio suficiente para un análisis semántico serio. Esta pestaña muestra ' +
-           'ese embudo —de dónde salió cada número y por qué se decidió cortar ahí— y cuánto ' +
-           'texto quedó al final en cada unidad.</p>');
+    h.push('<p>No todo lo que existe en los registros de la universidad entra al análisis. ' +
+           'Cada universo pasa primero por un filtro de calidad, porque hace falta texto propio ' +
+           'para poder extraer temas. Esta pestaña muestra ese filtro paso a paso, por qué se ' +
+           'puso ahí el corte, y cuánto texto queda al final en cada unidad.</p>');
 
     Object.keys(META).forEach(function(d){
       var m = META[d], prov = m.provenance || {steps: [], why: ''};
@@ -470,7 +502,7 @@ footer p{margin:0 0 6px;max-width:78ch}
       if (prov.why) h.push('<p class="note" style="margin:9px 2px 16px">' + prov.why + '</p>');
 
       h.push('<div class="chips">' + [
-        ['Caracteres por unidad · mediana', m.chars.p50],
+        ['Caracteres por unidad, mediana', m.chars.p50],
         ['media', Math.round(m.chars.mean)],
         ['p95', m.chars.p95],
         ['máximo', m.chars.max],
@@ -478,19 +510,16 @@ footer p{margin:0 0 6px;max-width:78ch}
         return '<span class="chip">' + c[0] + ' <b>' + c[1].toLocaleString('es') + '</b></span>';
       }).join('') + '</div>');
 
-      // Tabla de llenado por columna: de que insumo sale el texto de cada unidad.
-      var cols = d === 'projects' ? m.cols.filter(function(c){
-        var name = c.n.replace('aux:', '');
-        return !/^cris/i.test(name) && !/^source/i.test(name) && name !== 'openalex_abstract';
-      }) : m.cols;
-      var hadOpenAlex = d === 'projects' &&
-        m.cols.some(function(c){ return c.n.replace('aux:', '') === 'openalex_abstract'; });
+      // Tabla de llenado por columna: solo las que de verdad se exigen (100%
+      // en la poblacion filtrada). Las opcionales y las de respaldo (aux) no
+      // aportan a "que se esta considerando", asi que no se muestran aqui.
+      var cols = m.cols.filter(function(c){ return c.f >= 0.999; });
       h.push('<div class="exp" style="margin-top:14px"><div class="exp-head">' +
-             '<span class="nm">Qué columnas aportan ese texto</span>' +
-             '<span class="fl">' + m.src + ' · ' + m.rows.toLocaleString('es') +
-             ' filas de origen tras el filtro → ' + m.units.toLocaleString('es') + ' unidades' +
-             (m.dropped ? ' · ' + m.dropped.toLocaleString('es') +
-               ' descartadas (sin ninguna de ' + m.req.join('/') + ')' : '') +
+             '<span class="nm">Qué columnas dan ese texto</span>' +
+             '<span class="fl">' + m.src + ', ' + m.rows.toLocaleString('es') +
+             ' filas de origen pasan el filtro, ' + m.units.toLocaleString('es') + ' unidades' +
+             (m.dropped ? ', ' + m.dropped.toLocaleString('es') +
+               ' descartadas por no tener ' + m.req.join(' ni ') : '') +
              '</span></div><table class="fills"><tbody>');
       cols.forEach(function(c){
         h.push('<tr><td class="cn">' + c.n.replace('aux:', '') + '</td>' +
@@ -499,13 +528,7 @@ footer p{margin:0 0 6px;max-width:78ch}
                '<td class="pc">' + (c.f * 100).toFixed(1) + ' %  ·  ' +
                c.r.toLocaleString('es') + '</td></tr>');
       });
-      h.push('</tbody></table>' +
-        (hadOpenAlex ? '<p class="note" style="margin:8px 10px 2px">También se ocultó ' +
-          '<code>openalex_abstract</code>: no es un resumen del proyecto (OpenAlex no indexa ' +
-          'proyectos, sólo publicaciones), sino el resumen de un <b>resultado declarado</b> del ' +
-          'proyecto —una publicación que produjo— recuperado de OpenAlex cuando esa publicación ' +
-          'no traía resumen propio en CRIS, Scopus ni WoS.</p>' : '') +
-        '</div>');
+      h.push('</tbody></table></div>');
     });
     box.innerHTML = h.join('');
   }
@@ -614,28 +637,6 @@ footer p{margin:0 0 6px;max-width:78ch}
       });
       box.appendChild(chips);
 
-      if (t.on){
-        var onRow = el('div','chips');
-        var onChip = el('span','chip'); onChip.title = t.on.l;
-        onChip.appendChild(document.createTextNode('Objetivo Nacional (PEDN 2050) '));
-        onChip.appendChild(el('b', null, t.on.i + ' · ' + t.on.s));
-        onRow.appendChild(onChip);
-        var scChip = el('span','chip');
-        scChip.title = 'Similitud coseno, no un porcentaje: no suma 100 % con nada.';
-        scChip.appendChild(document.createTextNode('similitud (coseno) '));
-        scChip.appendChild(el('b', null, t.on.sc.toFixed(3)));
-        onRow.appendChild(scChip);
-        if (!t.on.ok){
-          var warnChip = el('span','chip');
-          warnChip.title = 'Contra el centroide del ON directamente, el mejor calce es ' + t.on.dl +
-            ' (similitud ' + t.on.dsc.toFixed(3) + ') — no coincide con la sub-temática más parecida.';
-          warnChip.appendChild(document.createTextNode('⚠ discrepa con '));
-          warnChip.appendChild(el('b', null, t.on.di));
-          onRow.appendChild(warnChip);
-        }
-        box.appendChild(onRow);
-      }
-
       var maxK = rows.length ? rows[0].k : 1;
       var wrap = el('div','tablewrap'), tbl = el('table');
       tbl.innerHTML = '<thead><tr>' +
@@ -703,103 +704,236 @@ footer p{margin:0 0 6px;max-width:78ch}
       box.appendChild(el('p','note','La columna verde suma 100 % en esta unidad: es cómo se reparte su ' +
         'contenido. La naranja no suma nada en particular aquí, porque compara esta unidad con ' +
         'todas las demás dentro de cada tema.'));
+      renderUnitCeplan(box, dom, sel.id);
     }
   }
 
-  function gotoTopic(d, id){
-    dom = d; sel = {kind: 't', id: id}; query = '';
-    document.getElementById('q').value = '';
-    document.querySelectorAll('.domains button').forEach(function(o){
-      o.setAttribute('aria-pressed', String(o.dataset.dom === d));
+  var STATUS_TXT = {
+    sin_candidatas: 'Ninguna sub-temática del PEDN 2050 se parece lo suficiente a esta unidad ' +
+      '(similitud bajo el piso). Es lo esperable en investigación básica sin relación con política pública.',
+    rechazadas_por_llm: 'Hubo sub-temáticas candidatas, pero el verificador no confirmó relación con ninguna.',
+    verificacion_fallida: 'La verificación de esta unidad no produjo una respuesta legible.'
+  };
+
+  function renderUnitCeplan(box, d, uid){
+    var C = DATA[d].ceplan;
+    if (!C) return;
+    var h = el('h3', null, 'Sub-temáticas del PEDN 2050');
+    h.style.cssText = 'font-size:18px;margin:26px 0 6px';
+    box.appendChild(h);
+    var links = C.units[uid];
+    if (!links){
+      box.appendChild(el('p', 'desc', STATUS_TXT[C.status[uid]] || 'Sin cruce con CEPLAN para esta unidad.'));
+      return;
+    }
+    var shown = links.slice(0, C.top);
+    var maxK = shown.reduce(function(m, r){ return Math.max(m, r[3]); }, 0.0001);
+    var wr = el('div', 'tablewrap'), tb = el('table');
+    tb.innerHTML = '<thead><tr><th>Sub-temática</th><th>Relación</th>' +
+      '<th class="c">Cuánto de la unidad es esta sub-temática<span class="hint">barra sobre 100 %</span></th>' +
+      '<th class="k">Cuánto de la sub-temática aporta<span class="hint">barra a escala del mayor valor de la tabla</span></th>' +
+      '</tr></thead>';
+    var body = el('tbody');
+    shown.forEach(function(r){
+      var s = C.subs[r[0]], tr = el('tr'), td = el('td');
+      var lk = el('button', 'linkish', s.l); lk.type = 'button';
+      lk.addEventListener('click', function(){ gotoSub(d, r[0]); });
+      td.appendChild(lk);
+      td.appendChild(el('span', 'unit-meta', s.o + ' · ' + s.t));
+      tr.appendChild(td);
+      var tdg = el('td'); tdg.appendChild(el('span', 'pill g' + r[1], r[1] === 2 ? 'clara' : 'tangencial'));
+      tr.appendChild(tdg);
+      tr.appendChild(barCell('c', r[2], 1));
+      tr.appendChild(barCell('k', r[3], maxK));
+      body.appendChild(tr);
     });
-    document.getElementById('explorer').hidden = false;
+    tb.appendChild(body); wr.appendChild(tb); box.appendChild(wr);
+    var extra = links.length > C.top ? ' Esta unidad tiene ' + links.length + ' vínculos confirmados; ' +
+      'se listan los ' + C.top + ' con mayor peso, pero la barra verde reparte el 100 % entre todos.' : '';
+    box.appendChild(el('p', 'note', 'Relación «clara» o «tangencial» según el verificador (' + C.model +
+      '), sobre candidatas propuestas por similitud de embeddings.' + extra));
+  }
+
+  var ceplanDom = 'projects', ceplanOpen = null, ceplanOnlyGaps = false;
+  var COV = {desarrollada: ['dev', 'Desarrollada'], debil: ['weak', 'Débil'], sin_desarrollo: ['none', 'Sin desarrollo']};
+
+  function showSection(which){
+    document.querySelectorAll('.domains button').forEach(function(o){
+      var want = which === 'ceplan' ? '__ceplan__' : which;
+      o.setAttribute('aria-pressed', String(o.dataset.dom === want));
+    });
+    var isCeplan = which === 'ceplan';
+    document.getElementById('explorer').hidden = isCeplan;
     document.getElementById('method').hidden = true;
     document.getElementById('provenance').hidden = true;
-    document.getElementById('ceplan').hidden = true;
-    document.querySelector('.metrics').hidden = false;
-    document.querySelector('.legend').hidden = false;
+    document.getElementById('ceplan').hidden = !isCeplan;
+    document.querySelector('.metrics').hidden = isCeplan;
+    document.querySelector('.legend').hidden = isCeplan;
+  }
+
+  function gotoUnit(d, uid){
+    dom = d; sel = {kind: 'u', id: uid}; query = '';
+    document.getElementById('q').value = '';
+    showSection(d);
     renderMetrics(); renderList(); renderDetail();
-    document.getElementById('detail').scrollIntoView({block: 'nearest'});
+    document.getElementById('detail').scrollIntoView({block: 'start'});
+  }
+
+  function gotoSub(d, sid){
+    ceplanDom = d; ceplanOpen = sid; ceplanOnlyGaps = false;
+    showSection('ceplan');
+    renderCeplan();
+    var target = document.getElementById('sub-' + sid);
+    if (target) target.scrollIntoView({block: 'center'});
   }
 
   function renderCeplan(){
     var box = document.getElementById('ceplan');
     box.textContent = '';
-    box.appendChild(el('h2', null, 'Temas vs. Objetivos Nacionales (PEDN 2050)'));
-    box.appendChild(el('p', 'desc', 'Cada tema normalizado comparado, por embeddings, contra la ' +
-      'taxonomía oficial de CEPLAN (hoja "Líneas de Inv." del PEDN 2050: 4 Objetivos Nacionales, ' +
-      '126 sub-temáticas). No se compara con ningún otro plan o política. El ⚠ marca los temas ' +
-      'donde la sub-temática más parecida y el Objetivo Nacional de mayor similitud directa no ' +
-      'coinciden — pasa en aproximadamente un tercio de los casos; se deja visible en vez de ' +
-      'resolverse en silencio.'));
+    box.appendChild(el('h2', null, 'Sub-temáticas del PEDN 2050'));
+    var avail = Object.keys(DATA).filter(function(d){ return DATA[d].ceplan; });
+    if (!avail.length){
+      box.appendChild(el('p', 'note', 'Todavía no hay un cruce con CEPLAN para ninguna de las ' +
+        'corridas cargadas (scripts/analysis/ceplan_units.py).'));
+      return;
+    }
+    if (avail.indexOf(ceplanDom) < 0) ceplanDom = avail[0];
+    var D = DATA[ceplanDom], C = D.ceplan;
+    box.appendChild(el('p', 'desc', 'Qué sub-temáticas de la hoja «Líneas de Inv.» del PEDN 2050 ' +
+      '(4 Objetivos Nacionales, 126 sub-temáticas) desarrolla cada ' + D.noun + ', y quién desarrolla ' +
+      'cada sub-temática. Los embeddings proponen candidatas (similitud ≥ ' + C.floor + ', en ambas ' +
+      'direcciones) y un modelo de lenguaje (' + C.model + ') confirma cada una como relación clara, ' +
+      'tangencial o ninguna. La cobertura cuenta solo relaciones claras.'));
 
-    var any = false;
-    Object.keys(DATA).forEach(function(d){
-      var D = DATA[d];
-      var ids = Object.keys(D.topics).filter(function(id){ return D.topics[id].on; });
-      if (!ids.length) return;
-      any = true;
-
-      box.appendChild(el('h3', null, NAMES[d] || d));
-
-      var byOn = {};
-      ids.forEach(function(id){
-        var t = D.topics[id], key = t.on.i;
-        if (!byOn[key]) byOn[key] = {label: t.on.l, ids: []};
-        byOn[key].ids.push(id);
-      });
-      var onKeys = Object.keys(byOn);
-      onKeys.forEach(function(k){
-        byOn[k].eq = byOn[k].ids.reduce(function(s, id){ return s + (D.topics[id].eq || 0); }, 0);
-      });
-      onKeys.sort(function(a, b){ return byOn[b].eq - byOn[a].eq; });
-      var totalEq = onKeys.reduce(function(s, k){ return s + byOn[k].eq; }, 0) || 1;
-
-      var wrap = el('div', 'tablewrap'), tbl = el('table');
-      tbl.innerHTML = '<thead><tr><th>Objetivo Nacional</th>' +
-        '<th class="c">Unidades-equiv.<span class="hint">vía mejor sub-temática de cada tema</span></th>' +
-        '<th class="c">% del corpus</th></tr></thead>';
-      var tb = el('tbody');
-      onKeys.forEach(function(k){
-        var tr = el('tr');
-        tr.appendChild(el('td', null, byOn[k].label));
-        var td1 = el('td', 'c'); td1.textContent = byOn[k].eq.toFixed(1); tr.appendChild(td1);
-        var td2 = el('td', 'c'); td2.textContent = (byOn[k].eq / totalEq * 100).toFixed(1) + ' %';
-        tr.appendChild(td2);
-        tb.appendChild(tr);
-      });
-      tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
-
-      onKeys.forEach(function(k){
-        var group = byOn[k];
-        var h4 = el('h3', null, group.label); h4.style.cssText = 'margin:18px 2px 6px;font-size:14.5px';
-        box.appendChild(h4);
-        var listWrap = el('div', 'tablewrap'), t2 = el('table');
-        t2.innerHTML = '<thead><tr><th>Tema</th><th>Sub-temática (PEDN 2050)</th>' +
-          '<th class="c">similitud<span class="hint">coseno, no un %</span></th>' +
-          '<th class="c">eq</th></tr></thead>';
-        var tb2 = el('tbody');
-        group.ids.sort(function(a, b){ return (D.topics[b].eq || 0) - (D.topics[a].eq || 0); });
-        group.ids.forEach(function(id){
-          var t = D.topics[id], tr = el('tr'), td = el('td');
-          var btn = el('button', 'linkish', t.l); btn.type = 'button';
-          btn.addEventListener('click', function(){ gotoTopic(d, id); });
-          td.appendChild(btn);
-          if (!t.on.ok){
-            var w = el('span'); w.title = 'Discrepa con el ON de mayor similitud directa: ' + t.on.dl;
-            w.textContent = ' ⚠'; td.appendChild(w);
-          }
-          tr.appendChild(td);
-          tr.appendChild(el('td', null, t.on.s));
-          var tdsc = el('td', 'c'); tdsc.textContent = t.on.sc.toFixed(3); tr.appendChild(tdsc);
-          var tdeq = el('td', 'c'); tdeq.textContent = (t.eq || 0).toFixed(1); tr.appendChild(tdeq);
-          tb2.appendChild(tr);
-        });
-        t2.appendChild(tb2); listWrap.appendChild(t2); box.appendChild(listWrap);
-      });
+    var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
+    avail.forEach(function(d){
+      var b = el('button', null, NAMES[d] || d); b.type = 'button';
+      b.setAttribute('aria-pressed', String(d === ceplanDom));
+      b.addEventListener('click', function(){ ceplanDom = d; ceplanOpen = null; renderCeplan(); });
+      seg.appendChild(b);
     });
-    if (!any) box.appendChild(el('p', 'note', 'Todavía no hay un cruce con CEPLAN para ninguna ' +
-      'de las corridas cargadas (scripts/analysis/ceplan_alignment.py).'));
+    box.appendChild(seg);
+
+    var nUnits = Object.keys(C.status).length, sc = C.sc;
+    var subsArr = Object.keys(C.subs).map(function(k){ return k; });
+    var nCov = {desarrollada: 0, debil: 0, sin_desarrollo: 0};
+    subsArr.forEach(function(k){ nCov[C.subs[k].cov]++; });
+    var chips = el('div', 'chips');
+    [[D.noun.charAt(0).toUpperCase() + D.noun.slice(1) + 's con alguna sub-temática',
+      sc.alineada + ' de ' + nUnits + ' (' + Math.round(100 * sc.alineada / nUnits) + ' %)'],
+     ['Relaciones claras', C.links['2']], ['Tangenciales', C.links['1']],
+     ['Sub-temáticas desarrolladas', nCov.desarrollada], ['Débiles', nCov.debil],
+     ['Sin desarrollo', nCov.sin_desarrollo]
+    ].forEach(function(c){
+      var s = el('span', 'chip'); s.appendChild(document.createTextNode(c[0] + ' '));
+      s.appendChild(el('b', null, String(c[1]))); chips.appendChild(s);
+    });
+    box.appendChild(chips);
+    box.appendChild(el('div', 'warn')).appendChild(el('p', null,
+      'La precisión de estos vínculos todavía se está validando contra una muestra calificada a mano. ' +
+      'Las relaciones tangenciales son las menos confiables; por eso no cuentan para la cobertura.'));
+
+    // reparto por ON
+    var onKeys = Object.keys(C.byOn).sort(function(a, b){ return C.byOn[b] - C.byOn[a]; });
+    var total = onKeys.reduce(function(s, k){ return s + C.byOn[k]; }, 0) || 1;
+    var wrap = el('div', 'tablewrap'), tbl = el('table');
+    tbl.innerHTML = '<thead><tr><th>Objetivo Nacional</th>' +
+      '<th class="c">' + D.noun.charAt(0).toUpperCase() + D.noun.slice(1) + 's-equivalentes' +
+      '<span class="hint">cada unidad reparte 1 entre sus sub-temáticas</span></th>' +
+      '<th class="c">% de lo alineado</th></tr></thead>';
+    var tb = el('tbody');
+    onKeys.forEach(function(k){
+      var tr = el('tr');
+      tr.appendChild(el('td', null, C.on[k]));
+      var t1 = el('td', 'num'); t1.textContent = C.byOn[k].toFixed(1); tr.appendChild(t1);
+      tr.appendChild(barCell('c', C.byOn[k] / total, 1));
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
+
+    var f = el('div', 'filters');
+    var lab = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.id = 'ceplan-gaps';
+    cb.checked = ceplanOnlyGaps;
+    cb.addEventListener('change', function(){ ceplanOnlyGaps = cb.checked; renderCeplan(); });
+    lab.appendChild(cb); lab.appendChild(document.createTextNode('Mostrar solo sub-temáticas débiles o sin desarrollo'));
+    f.appendChild(lab);
+    f.style.marginTop = '22px';
+    box.appendChild(f);
+
+    // ON -> Tematica -> Sub-tematica
+    Object.keys(C.on).sort().forEach(function(on){
+      var ids = subsArr.filter(function(k){
+        return C.subs[k].o === on && (!ceplanOnlyGaps || C.subs[k].cov !== 'desarrollada');
+      });
+      if (!ids.length) return;
+      var blk = el('div', 'on-block');
+      blk.appendChild(el('h4', null, C.on[on]));
+      var dev = ids.filter(function(k){ return C.subs[k].cov === 'desarrollada'; }).length;
+      blk.appendChild(el('p', 'on-sum', ids.length + ' sub-temáticas' +
+        (ceplanOnlyGaps ? ' con poco o ningún desarrollo' : ' · ' + dev + ' desarrolladas')));
+      var temas = {};
+      ids.forEach(function(k){ (temas[C.subs[k].t] = temas[C.subs[k].t] || []).push(k); });
+      Object.keys(temas).sort().forEach(function(t){
+        blk.appendChild(el('div', 'tema-h', t));
+        temas[t].sort(function(a, b){ return C.subs[b].eq - C.subs[a].eq; }).forEach(function(k){
+          blk.appendChild(subRow(ceplanDom, k));
+        });
+      });
+      box.appendChild(blk);
+    });
+  }
+
+  function subRow(d, sid){
+    var D = DATA[d], C = D.ceplan, s = C.subs[sid];
+    var det = el('details', 'subrow'); det.id = 'sub-' + sid;
+    if (ceplanOpen === sid) det.open = true;
+    var sm = el('summary');
+    sm.appendChild(el('span', 'nm', s.l));
+    var cov = COV[s.cov];
+    sm.appendChild(el('span', 'pill ' + cov[0], cov[1]));
+    sm.appendChild(el('span', 'ct', s.n2 + ' claras · ' + (s.n - s.n2) + ' tang. · ' + s.eq.toFixed(1) + ' eq'));
+    det.appendChild(sm);
+    var filled = false;
+    det.addEventListener('toggle', function(){
+      if (det.open) ceplanOpen = sid;
+      if (!det.open || filled) return;
+      filled = true;
+      var inner = el('div', 'inner');
+      var rows = [];
+      Object.keys(C.units).forEach(function(u){
+        C.units[u].forEach(function(r){ if (r[0] === sid) rows.push({u: u, g: r[1], c: r[2], k: r[3]}); });
+      });
+      rows.sort(function(a, b){ return (b.g - a.g) || (b.k - a.k); });
+      if (!rows.length){
+        inner.appendChild(el('p', 'note', 'Ninguna ' + D.noun + ' tiene una relación confirmada con esta sub-temática.'));
+        det.appendChild(inner); return;
+      }
+      var maxK = rows.reduce(function(m, r){ return Math.max(m, r.k); }, 0.0001);
+      var wr = el('div', 'tablewrap'), tb = el('table');
+      tb.innerHTML = '<thead><tr><th>' + esc(D.noun.charAt(0).toUpperCase() + D.noun.slice(1)) + '</th>' +
+        '<th>Relación</th>' +
+        '<th class="k">Cuánto de la sub-temática aporta<span class="hint">barra a escala del mayor valor de la tabla</span></th>' +
+        '<th class="c">Cuánto de la unidad es esta sub-temática<span class="hint">barra sobre 100 %</span></th>' +
+        '</tr></thead>';
+      var body = el('tbody');
+      rows.forEach(function(r){
+        var u = D.units[r.u] || {t: r.u}, tr = el('tr'), td = el('td');
+        var lk = el('button', 'linkish', u.t || r.u); lk.type = 'button';
+        lk.addEventListener('click', function(){ gotoUnit(d, r.u); });
+        td.appendChild(lk);
+        var meta = [u.y || '', u.g || ''].filter(Boolean).join(' · ');
+        if (meta) td.appendChild(el('span', 'unit-meta', meta));
+        tr.appendChild(td);
+        var tdg = el('td'); tdg.appendChild(el('span', 'pill g' + r.g, r.g === 2 ? 'clara' : 'tangencial'));
+        tr.appendChild(tdg);
+        tr.appendChild(barCell('k', r.k, maxK));
+        tr.appendChild(barCell('c', r.c, 1));
+        body.appendChild(tr);
+      });
+      tb.appendChild(body); wr.appendChild(tb); inner.appendChild(wr);
+      det.appendChild(inner);
+    });
+    return det;
   }
 
   document.querySelectorAll('.domains button').forEach(function(b){

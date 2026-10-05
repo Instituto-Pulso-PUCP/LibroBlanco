@@ -182,16 +182,22 @@ class BedrockClient:
 
     def _invoke(self, model_id: str, body: dict):
         """Llama a Bedrock reintentando el throttling. Devuelve (respuesta, stats)."""
+        def call():
+            response = self.runtime.invoke_model(
+                modelId=model_id, body=json.dumps(body),
+                contentType="application/json", accept="application/json",
+            )
+            return json.loads(response["body"].read())
+        return self._with_retries(model_id, call)
+
+    def _with_retries(self, model_id: str, call):
+        """Ejecuta ``call()`` reintentando el throttling. Devuelve (respuesta, stats)."""
         retries = throttles = 0
         start = time.perf_counter()
         last = None
         for attempt in range(self.max_retries):
             try:
-                response = self.runtime.invoke_model(
-                    modelId=model_id, body=json.dumps(body),
-                    contentType="application/json", accept="application/json",
-                )
-                payload = json.loads(response["body"].read())
+                payload = call()
                 stats = {"latency": time.perf_counter() - start,
                          "retries": retries, "throttles": throttles}
                 return payload, stats
@@ -318,6 +324,38 @@ class BedrockClient:
                 latency_seconds=stats["latency"], retries=stats["retries"],
                 throttles=stats["throttles"])
         return "".join(block.get("text", "") for block in payload.get("content", []))
+
+    def converse(self, system: str, user: str, model_id: str,
+                 max_tokens: int = 2048) -> str:
+        """Una respuesta de texto por la API Converse de Bedrock.
+
+        A diferencia de ``complete`` (formato Messages de Anthropic), Converse
+        tiene el mismo request para todos los proveedores (Nova, Llama, Qwen,
+        gpt-oss, GLM, Claude...), asi que sirve para comparar modelos sin una
+        rama por familia. Los bloques de razonamiento que devuelven algunos
+        modelos (gpt-oss, Qwen3) se descartan: solo se devuelve el texto final.
+        """
+        def call():
+            return self.runtime.converse(
+                modelId=model_id,
+                system=[{"text": system}],
+                messages=[{"role": "user", "content": [{"text": user}]}],
+                inferenceConfig={"maxTokens": int(max_tokens)},
+            )
+        payload, stats = self._with_retries(model_id, call)
+        usage = payload.get("usage", {})
+        if self.stage:
+            self.stage.record_llm(
+                model_id,
+                input_tokens=usage.get("inputTokens", 0),
+                output_tokens=usage.get("outputTokens", 0),
+                latency_seconds=stats["latency"], retries=stats["retries"],
+                throttles=stats["throttles"])
+        self.last_usage = {"input_tokens": usage.get("inputTokens", 0),
+                           "output_tokens": usage.get("outputTokens", 0),
+                           "latency": stats["latency"]}
+        blocks = payload.get("output", {}).get("message", {}).get("content", [])
+        return "".join(block.get("text", "") for block in blocks if "text" in block)
 
 
 class OpenAICompatClient:
