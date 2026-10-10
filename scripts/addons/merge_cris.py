@@ -165,7 +165,7 @@ def load_full_project_index(xlsx_path: Path) -> dict:
 
 
 CRIS_ENRICH_COLS = [
-    'internalid', 'cris_abstract', 'cris_keywords', 'cris_ocde_subject', 'cris_fos',
+    'cris_uuid', 'internalid', 'cris_abstract', 'cris_keywords', 'cris_ocde_subject', 'cris_fos',
     'cris_type_ocde', 'cris_status', 'cris_start_date', 'cris_end_date',
     'cris_coordinator', 'cris_coinvestigators', 'cris_coinvestigator_roles',
     'cris_coinvestigator_count_mismatch',

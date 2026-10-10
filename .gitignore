@@ -10,6 +10,7 @@ scripts/**/__pycache__
 
 # Generated colored XLSX outputs (input data lives in datos/ and is not ignored)
 salidas/*.xlsx
+salidas/para_equipo
 
 # Salidas del pipeline de temas: se regeneran corriendo la etapa correspondiente
 # (los datos de verdad viven en RDS/S3), o el atlas con

@@ -21,6 +21,11 @@ Diferencias deliberadas frente al original:
   - No genera el XLSX coloreado (needs pandas/openpyxl con estilos); solo el
     CSV enriquecido y los reportes.
 
+Overrides manuales (`datos/cris_overrides.csv`, los mismos que usa
+`merge_cris.py`): se aplican `match` y `skip`. `new` no hace nada aqui (este
+script no agrega filas); esas filas ya existen en el maestro desde la corrida
+de `01_build_pipeline.py` y se re-emparejan por titulo como cualquier otra.
+
 Uso:
     python scripts/addons/merge_cris_stdlib.py
     python scripts/addons/merge_cris_stdlib.py --cris datos/ProyectosPUCPCRIS-20260929.csv
@@ -60,7 +65,7 @@ CRIS_COLUMN_MAP = {
     "crispj.coinvestigators.role": "cris_coinvestigator_roles",
 }
 CRIS_ENRICH_COLS = [
-    "internalid", "cris_abstract", "cris_keywords", "cris_ocde_subject", "cris_fos",
+    "cris_uuid", "internalid", "cris_abstract", "cris_keywords", "cris_ocde_subject", "cris_fos",
     "cris_type_ocde", "cris_status", "cris_start_date", "cris_end_date",
     "cris_coordinator", "cris_coinvestigators", "cris_coinvestigator_roles",
     "cris_coinvestigator_count_mismatch",
@@ -252,6 +257,7 @@ def match_and_merge(main: list[dict], cris: list[dict], full_index, fuzzy_thresh
 
     for m in ("code", "title_exact", "title_fuzzy"):
         stats[m] = sum(1 for v in method_of_pid.values() if v == m)
+    stats["matched_pids"] = set(method_of_pid)
 
     merged = []
     preserved = 0
@@ -285,6 +291,41 @@ def report_row(cr, reason, best_score=None, best_pid=None):
     }
 
 
+def load_overrides(path: Path) -> dict[str, dict]:
+    """cris_uuid -> {action, target_project_id}. Mismo formato que merge_cris.load_overrides."""
+    if not path or not path.exists():
+        return {}
+    overrides = {}
+    for r in read_csv(path):
+        uuid, action = (r.get("cris_uuid") or "").strip(), (r.get("action") or "").strip().lower()
+        if not uuid or not action:
+            continue
+        if action not in ("match", "new", "skip"):
+            raise ValueError(f"Accion invalida '{action}' para cris_uuid={uuid}; use match/new/skip.")
+        target = (r.get("target_project_id") or "").strip()
+        if action == "match" and not target:
+            raise ValueError(f"action=match requiere target_project_id (cris_uuid={uuid}).")
+        overrides[uuid] = {"action": action, "target_project_id": target}
+    return overrides
+
+
+def apply_overrides(cris: list[dict], overrides: dict, valid_pids: set[str]):
+    """Separa (filas para el match automatico, matches manuales, filas de reporte)."""
+    remaining, manual, report = [], [], []
+    for cr in cris:
+        ov = overrides.get(cr["cris_uuid"])
+        if ov is None or ov["action"] == "new":
+            remaining.append(cr)
+        elif ov["action"] == "skip":
+            report.append(report_row(cr, "manual_skip"))
+        elif ov["target_project_id"] not in valid_pids:
+            report.append(report_row(cr, "invalid_override_target_project_id",
+                                     best_pid=ov["target_project_id"]))
+        else:
+            manual.append((cr, ov["target_project_id"]))
+    return remaining, manual, report
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -293,6 +334,8 @@ def main(argv=None):
     parser.add_argument("--cris", type=Path, default=None,
                         help="Export CRIS nuevo (por defecto, el mas reciente en datos/).")
     parser.add_argument("--xlsx", type=Path, default=XLSX_INPUT)
+    parser.add_argument("--overrides", type=Path, default=DATOS / "cris_overrides.csv",
+                        help="Decisiones manuales match/skip por cris_uuid.")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--fuzzy-threshold", type=float, default=0.65)
     parser.add_argument("--new-row-min-score", type=float, default=0.35)
@@ -311,8 +354,26 @@ def main(argv=None):
     cris_rows = load_cris(Path(cris_path))
     full_index = load_full_project_index(args.xlsx)
 
+    cris_rows, manual_matches, override_report = apply_overrides(
+        cris_rows, load_overrides(args.overrides), {r["project_id"] for r in main_rows})
+
     merged, stats, new_candidates, report_rows, preserved = match_and_merge(
         main_rows, cris_rows, full_index, args.fuzzy_threshold, args.new_row_min_score)
+    report_rows += override_report
+
+    # Igual que merge_cris.py: un match manual nunca pisa uno automatico de esta corrida.
+    by_pid = {r["project_id"]: r for r in merged}
+    manual_applied = 0
+    for cr, pid in manual_matches:
+        row = by_pid[pid]
+        if pid in stats["matched_pids"]:
+            report_rows.append(report_row(cr, f"override_conflicts_with_{row['cris_match_method']}_match",
+                                          best_pid=pid))
+            continue
+        for col in CRIS_ENRICH_COLS:
+            row[col] = cr.get(col, "")
+        row["cris_match_method"] = "manual_match"
+        manual_applied += 1
 
     before_abs = sum(1 for r in main_rows if r.get("cris_abstract"))
     after_abs = sum(1 for r in merged if r.get("cris_abstract"))
@@ -325,6 +386,7 @@ def main(argv=None):
           f"({len(report_rows)} filas CRIS sin resolver -> reporte)")
     print(f"- {len(new_candidates)} filas CRIS sin match que parecen proyecto nuevo (NO se agregan; "
           "revisar aparte)")
+    print(f"- {manual_applied} matches manuales aplicados desde {args.overrides.name}")
     print(f"- {preserved} proyectos sin match esta vez pero con dato previo, conservado")
     print(f"- cris_abstract: {before_abs} -> {after_abs} de {len(merged)} "
           f"({after_abs/len(merged)*100:.1f}%)")

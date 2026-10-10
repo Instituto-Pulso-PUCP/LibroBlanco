@@ -1,10 +1,14 @@
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
-\usepackage[spanish]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[spanish,es-nodecimaldot]{babel}
 \usepackage{amsmath, amssymb}
 \usepackage[margin=2.7cm]{geometry}
 \usepackage{booktabs}
+\usepackage{microtype}
 \usepackage{hyperref}
+\emergencystretch=3em
 
 \newcommand{\afinidad}{w}
 
@@ -141,7 +145,7 @@ $PC_{\text{norm}}$ (normalización de Dunn/Backer), comparable entre corridas
 con distinto $T$.
 
 \begin{center}
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}llp{6.2cm}@{}}
 \toprule
 $PC_{\text{norm}}$ & Interpretación & \\
 \midrule
@@ -167,7 +171,7 @@ singulares con saltos markovianos''}, corrida \texttt{full-proj-409}.
 
 \paragraph{Paso 2 --- contención:}
 \[
-  C[u,t] = \frac{0.8876}{1.0000} = 0.8876 \;\to\; 88.8\,\%
+  C[u,t] = \frac{0.8876}{1.0000} = 0.8876 \;\to\; 88.8\,\text{\%}
 \]
 El 88.8\,\% de lo que trata este proyecto es este tema.
 
@@ -181,7 +185,7 @@ Vale 4.48 proyectos enteros, aunque lo rocen 17.
 
 \paragraph{Paso 4 --- contribución:}
 \[
-  K[u,t] = \frac{C[u,t]}{E[t]} = \frac{0.8876}{4.48} = 0.1982 \;\to\; 19.8\,\%
+  K[u,t] = \frac{C[u,t]}{E[t]} = \frac{0.8876}{4.48} = 0.1982 \;\to\; 19.8\,\text{\%}
 \]
 Este proyecto es, él solo, el 19.8\,\% de todo el tema.
 
@@ -225,13 +229,15 @@ en este tema?'' sin decir en qué dirección no tiene una sola respuesta.
 \section{Reproducibilidad}
 
 Todas las cifras de este documento salen de la corrida \texttt{full-proj-409}
-del dominio \texttt{projects} (409 proyectos, filtrados por universo mínimo
-declarado: cerrado y 2010+, con \texttt{title}, \texttt{knowledge\_area} y al
-menos una línea de investigación). Fórmulas implementadas en
-\texttt{scripts/lib/lb\_membership.py}; corren sobre Amazon Bedrock
+del dominio \texttt{projects} (409 proyectos, filtrados por el universo mínimo
+vigente entonces: cerrado y 2010+, con \texttt{title}, \texttt{knowledge\_area}
+y al menos una línea de investigación). Desde el 2026-09-30 el atlas publicado
+usa otra corrida, \texttt{full-proj-646} (criterio \texttt{title} +
+\texttt{cris\_abstract}), así que los números del ejemplo no coinciden con lo
+que muestra el atlas hoy; las fórmulas son las mismas. Fórmulas implementadas
+en \texttt{scripts/lib/lb\_membership.py}; corren sobre Amazon Bedrock
 (\texttt{Claude Sonnet 5} para extracción y nombrado,
 \texttt{cohere.embed-multilingual-v3} para embeddings) y se guardan en
-PostgreSQL con \texttt{pgvector} en Amazon RDS. El explorador interactivo de
-esta misma corrida está en el atlas temático publicado por el equipo.
+PostgreSQL con \texttt{pgvector} en Amazon RDS.
 
 \end{document}

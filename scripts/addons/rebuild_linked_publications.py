@@ -15,15 +15,28 @@ Cascada de procedencia (se para en la primera que da texto util, >80 chars):
                      OpenAlex/PubMed; llegó despues del resto de las fuentes,
                      asi que no estaba disponible cuando se armaron)
   3. resumen         `07_..._ground_truth.csv`, resumen humano por DOI
-  4. openalex        idem, reconstruido del abstract_inverted_index
+  4. openalex        idem, reconstruido del abstract_inverted_index. Solo si la
+                     obra se emparejo por DOI, o por titulo con similitud
+                     >= OPENALEX_MIN_TITLE_SIM: la busqueda por titulo de la
+                     etapa de enriquecimiento toma el primer resultado sin
+                     verificarlo, y en ~3 de cada 4 casos es otra obra (p.ej.
+                     el titulo de relleno "EXONERADO" trajo el resumen de un
+                     articulo sobre Carlos II).
   5. source          idem, abstract de la fuente original (WoS/RI)
-  6. vri_dfi         `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
+  6. pulso_wos       hoja `Pubs_WoS` del Excel de PULSO, por DOI o titulo
+  7. vri_dfi         `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
 
-Las palabras clave tambien se completan desde doi-resultados-final.csv cuando
-faltan en master/ground-truth.
+Palabras clave, cuando faltan en master/ground-truth, en este orden:
+doi-resultados-final.csv (por DOI), hojas `Pubs_RI` (`key_words`) y `Pubs_WoS`
+(`keywords` + `keywords_plus`) del Excel de PULSO (por DOI o titulo), y los
+`dc.subject*` del CSV VRI-DFI (por titulo).
 
-Anade la columna `abstract_source` con la procedencia, para poder auditar
-despues de donde salio cada texto. Sin dependencias externas: solo stdlib
+El paso 6 y las hojas de PULSO importan sobre todo para los resultados que no
+cruzaron al catalogo maestro por DOI (ids `gt_*`): para ellos el master no
+aporta nada, pero la misma publicacion suele estar en las hojas por titulo.
+
+Anade las columnas `abstract_source` y `keywords_source` con la procedencia,
+para poder auditar despues de donde salio cada texto. Solo stdlib + openpyxl
 (el script original usaba pandas, que no esta instalado en este servidor).
 
     python scripts/addons/rebuild_linked_publications.py
@@ -34,10 +47,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 import sys
 import unicodedata
 from collections import Counter
+from difflib import SequenceMatcher
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,9 +63,15 @@ GT = ROOT / "salidas" / "07_project_publication_ground_truth.csv"
 MASTER = ROOT / "salidas" / "03_publications_master.csv"
 VRI = ROOT / "datos" / "Publicaciones - VRI-DFI 20260721.csv"
 DOI_RESULTADOS = ROOT / "datos" / "doi-resultados-final.csv"
+PULSO_XLSX = ROOT / "datos" / "informacion_proyecto_pulso.xlsx"
+OPENALEX_RAW = ROOT / "salidas" / "06_project_results_ground_truth_openalex_raw_payload.jsonl"
 OUT = ROOT / "salidas" / "07_publications_linked_full.csv"
 
 MIN_CHARS = 80   # por debajo de esto no es un abstract, es un resto
+# Revisado a mano contra los 113 emparejamientos por titulo: por debajo de esto
+# eran todos otra obra; los emparejados por DOI con similitud baja eran la
+# misma obra con el titulo traducido, por eso el DOI no pasa por este filtro.
+OPENALEX_MIN_TITLE_SIM = 0.85
 
 
 def norm_title(text: str) -> str:
@@ -90,6 +111,73 @@ def load_doi_resultados() -> dict[str, dict]:
     return out
 
 
+def title_similarity(a: str, b: str) -> float:
+    """Mayor entre la similitud de secuencia y el solapamiento de palabras
+    (sobre el titulo mas corto, para tolerar subtitulos agregados)."""
+    a, b = norm_title(a), norm_title(b)
+    if not a or not b:
+        return 0.0
+    ta, tb = set(a.split()), set(b.split())
+    return max(SequenceMatcher(None, a, b).ratio(), len(ta & tb) / min(len(ta), len(tb)))
+
+
+def load_openalex_titles() -> dict[tuple[str, str], str]:
+    """(project_id, cod_prod) -> titulo de la obra OpenAlex emparejada."""
+    if not OPENALEX_RAW.exists():
+        return {}
+    out = {}
+    with OPENALEX_RAW.open(encoding="utf-8") as handle:
+        for line in handle:
+            row = json.loads(line)
+            payload = row.get("openalex_raw_payload")
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except ValueError:
+                    continue
+            if isinstance(payload, dict) and payload.get("id"):
+                out[(str(row["project_id"]), str(row["cod_prod"]))] = payload.get("title") or ""
+    return out
+
+
+def load_pulso_sheets() -> tuple[dict, dict]:
+    """(por DOI, por titulo) -> lista de aportes {sheet, abstract, keywords} desde
+    las hojas Pubs_WoS y Pubs_RI del Excel de PULSO.
+
+    La columna Abstract de Pubs_SCOPUS no se lee: es un enlace en todas sus filas.
+    """
+    if not PULSO_XLSX.exists():
+        return {}, {}
+    import openpyxl
+    wb = openpyxl.load_workbook(PULSO_XLSX, read_only=True, data_only=True)
+
+    def rows(name):
+        it = wb[name].iter_rows(values_only=True)
+        header = next(it)
+        for r in it:
+            yield dict(zip(header, ["" if v is None else str(v) for v in r]))
+
+    by_doi, by_title = {}, {}
+
+    def add(sheet, doi, title, abstract, keywords):
+        entry = {"sheet": sheet, "abstract": useful(abstract),
+                 "keywords": lb_domains.clean_value(keywords)}
+        if not entry["abstract"] and not entry["keywords"]:
+            return
+        if norm_doi(doi):
+            by_doi.setdefault(norm_doi(doi), []).append(entry)
+        if len(norm_title(title)) > 15:
+            by_title.setdefault(norm_title(title), []).append(entry)
+
+    for r in rows("Pubs_WoS"):
+        kw = "; ".join(k for k in (lb_domains.clean_value(r.get("keywords")),
+                                    lb_domains.clean_value(r.get("keywords_plus"))) if k)
+        add("pulso_wos", r.get("doi"), r.get("title"), r.get("abstract"), kw)
+    for r in rows("Pubs_RI"):
+        add("pulso_ri", r.get("doi"), r.get("titulo"), "", r.get("key_words"))
+    return by_doi, by_title
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
@@ -101,7 +189,13 @@ def main():
     doi_resultados = load_doi_resultados()
     print(f"doi-resultados-final.csv: {len(doi_resultados):,} DOIs cargados"
           if doi_resultados else "doi-resultados-final.csv no encontrado; se omite ese paso.")
-    vri = {}
+    pulso_by_doi, pulso_by_title = load_pulso_sheets()
+    openalex_titles = load_openalex_titles()
+    if not openalex_titles:
+        print(f"AVISO: no se encontro {OPENALEX_RAW.name}; no se puede verificar el titulo de los "
+              "emparejamientos OpenAlex por titulo, asi que se descartan todos los que no sean por DOI.")
+    openalex_rejected = 0
+    vri, vri_kw = {}, {}
     if VRI.exists():
         for row in read_csv(VRI):
             title = norm_title(lb_domains.clean_value(row.get("dc.title[es_ES]"))
@@ -110,8 +204,12 @@ def main():
                     or useful(row.get("dc.description.abstract[es_ES]")))
             if title and text:
                 vri[title] = text
+            subjects = "; ".join(k for k in (lb_domains.clean_value(row.get(c)) for c in (
+                "dc.subject", "dc.subject[en_US]", "dc.subject[es_ES]")) if k)
+            if title and subjects:
+                vri_kw[title] = subjects
 
-    rows, provenance = [], Counter()
+    rows, provenance, kw_provenance = [], Counter(), Counter()
     for record in ground:
         pub_id = lb_domains.clean_value(record.get("publication_id"))
         matched = master.get(pub_id, {})
@@ -130,6 +228,18 @@ def main():
 
         doi = norm_doi(record.get("doi_norm")) or norm_doi(matched.get("doi") if matched else "")
         doi_hit = doi_resultados.get(doi, {})
+        pulso_hits = (pulso_by_doi.get(doi, []) if doi else []) + (
+            pulso_by_title.get(norm_title(title), []) if title else [])
+
+        # OpenAlex: por DOI vale siempre; por titulo, solo si el titulo coincide.
+        openalex_abstract = record.get("openalex_abstract")
+        if useful(openalex_abstract) and not norm_doi(record.get("doi_norm")):
+            key = (lb_domains.clean_value(record.get("project_id")),
+                   lb_domains.clean_value(record.get("cod_prod")))
+            declared = lb_domains.clean_value(record.get("result_title")) or title
+            if title_similarity(declared, openalex_titles.get(key, "")) < OPENALEX_MIN_TITLE_SIM:
+                openalex_abstract = ""
+                openalex_rejected += 1
 
         # La cascada: el fallo original era pararse en el primer paso.
         abstract, source = "", ""
@@ -137,8 +247,9 @@ def main():
             (matched.get("abstract") if matched else "", "master"),
             (doi_hit.get("resumen"), "doi_resultados"),
             (record.get("resumen"), "resumen"),
-            (record.get("openalex_abstract"), "openalex"),
+            (openalex_abstract, "openalex"),
             (record.get("source_abstract"), "source"),
+            (next((h["abstract"] for h in pulso_hits if h["abstract"]), ""), "pulso_wos"),
             (vri.get(norm_title(title)) if title else "", "vri_dfi"),
         ):
             text = useful(candidate)
@@ -146,8 +257,21 @@ def main():
                 abstract, source = text, label
                 break
 
+        keywords_source = "master_o_ground_truth" if keywords else ""
         if not keywords:
-            keywords = lb_domains.clean_value(doi_hit.get("palabras_clave"))
+            for candidate, label in (
+                (doi_hit.get("palabras_clave"), "doi_resultados"),
+                (next((h["keywords"] for h in pulso_hits
+                       if h["sheet"] == "pulso_ri" and h["keywords"]), ""), "pulso_ri"),
+                (next((h["keywords"] for h in pulso_hits
+                       if h["sheet"] == "pulso_wos" and h["keywords"]), ""), "pulso_wos"),
+                (vri_kw.get(norm_title(title)) if title else "", "vri_dfi"),
+            ):
+                keywords = lb_domains.clean_value(candidate)
+                if keywords:
+                    keywords_source = label
+                    break
+        kw_provenance[keywords_source or "sin_keywords"] += 1
 
         provenance[source or "sin_abstract"] += 1
         rows.append({
@@ -156,6 +280,7 @@ def main():
             "abstract": abstract,
             "abstract_source": source,
             "keywords": keywords,
+            "keywords_source": keywords_source,
             "journal": journal,
             # trazabilidad hacia el proyecto que declaro este resultado
             "project_id": lb_domains.clean_value(record.get("project_id")),
@@ -167,21 +292,25 @@ def main():
     print(f"{len(rows)} resultados declarados")
     print(f"  con abstract        : {with_abstract} ({with_abstract/len(rows)*100:.1f}%)")
     print(f"  con algo de texto   : {with_text}")
+    print(f"  resumenes OpenAlex descartados (otra obra, emparejada por titulo): {openalex_rejected}")
     print("  procedencia del abstract:")
     for label, count in provenance.most_common():
         print(f"    {label:14s} {count:5d}")
+    print("  procedencia de las palabras clave:")
+    for label, count in kw_provenance.most_common():
+        print(f"    {label:22s} {count:5d}")
 
     if args.dry_run:
         print("\n--dry-run: no se escribe nada.")
         return
 
     fields = ["publication_id", "title", "abstract", "abstract_source",
-              "keywords", "journal", "project_id"]
+              "keywords", "keywords_source", "journal", "project_id"]
     with args.out.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
-    print(f"\n-> {args.out.relative_to(ROOT)}")
+    print(f"\n-> {args.out}")
 
 
 if __name__ == "__main__":

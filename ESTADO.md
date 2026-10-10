@@ -120,15 +120,63 @@ OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
   (Scopus/OpenAlex/PubMed). Sí hay ~347 abstracts recuperables en el catálogo
   general de publicaciones (13 995, no ligadas a un proyecto), pero eso no es
   parte del universo que se usa hoy. No hace falta volver a correr nada.
+- **Re-correr `publications_linked` (y `projects`) en el servidor** tras los
+  cambios del 2026-10-10 en `rebuild_linked_publications.py` y
+  `merge_cris_stdlib.py` (detalle abajo). Ninguno se ha corrido todavía contra
+  RDS: el atlas publicado sigue en `full-proj-646` / `publications_linked-529`.
+  Orden: `merge_cris_stdlib.py` → `rebuild_linked_publications.py` →
+  `run_domain.py` para cada dominio (reextracción desde cero en
+  `publications_linked`: cambia el texto de 98 unidades, no solo el universo).
+  Después, actualizar los números escritos a mano en
+  `build_atlas.py::provenance_notes`.
+- **Hallazgo 2026-10-10 — resúmenes OpenAlex de otra obra.** La etapa de
+  enriquecimiento (`openalex_helpers.build_openalex_query`, `search.exact`,
+  `per-page=1`) toma el primer resultado de la búsqueda por título sin
+  verificarlo. De los 113 resúmenes OpenAlex emparejados por título que
+  entraban al universo de `publications_linked`, 98 eran de otra obra
+  (similitud de título < 0.85, revisado a mano; p.ej. "EXONERADO" → un
+  artículo sobre Carlos II). `rebuild_linked_publications.py` ahora los
+  descarta (`OPENALEX_MIN_TITLE_SIM`); el universo pasa de 531 a **433**
+  publicaciones. Los emparejados por DOI no se tocan. Pendiente: corregir en
+  origen (`openalex_helpers`) y revisar lo que deriva de esas columnas: el
+  texto auxiliar de `projects` (`aux:openalex_abstract`, solo para proyectos
+  con `cris_abstract` < 200 caracteres) y las cifras de OpenAlex de las
+  láminas del 15-08 (autores, revista, país).
+- **Cambios 2026-10-10 en la cascada de `publications_linked`**: además del
+  filtro anterior, toma resúmenes de la hoja `Pubs_WoS` (+2) y palabras clave
+  de `Pubs_RI`/`Pubs_WoS`/VRI-DFI (+56) del Excel de PULSO, con columna nueva
+  `keywords_source`.
+- **Cambios 2026-10-10 en `merge_cris_stdlib.py`**: conserva `cris_uuid` (también
+  `merge_cris.py`) y aplica los overrides manuales `match`/`skip` de
+  `datos/cris_overrides.csv`, como ya hacía la versión con pandas. Efecto: los
+  11 proyectos emparejados a mano reciben los datos del export del 29-set;
+  proyectos con `cris_abstract` pasan de 646 a **653**.
 - **Limpieza de disco pendiente de decisión** (nada de esto está en git, es
-  solo espacio en el servidor): `salidas/libro_blanco.db` (74 MB, DB pre-RDS),
-  `salidas/openalex_cache.jsonl` (126 MB, caché de API), ~50 MB de CSV
-  intermedios de la cadena de build legada.
-- **`docs/formulas_cuantificacion.tex`**: escrito, no compilado (sin
-  `pdflatex`/`xelatex` en este servidor). Verificar en un entorno con LaTeX
-  antes de distribuirlo.
-- Sin comenzar: benchmark Cohere vs. Titan embeddings; comparación
-  cruzada proyecto↔publicación ("¿publicaron lo que propusieron?").
+  solo espacio en el servidor). Ojo antes de borrar: `salidas/libro_blanco.db`
+  (74 MB) no es solo histórico, la leen `pipeline/02_match_candidates.py` y
+  `analysis/compare_v1_v2.py`; `salidas/openalex_cache.jsonl` (126 MB) evita
+  repetir ~7 000 llamadas a OpenAlex si se re-corre `01_build_pipeline.py`.
+  Sugerencia: mover ambos a S3 en vez de borrarlos; los ~50 MB de CSV
+  intermedios de la cadena legada sí se pueden borrar.
+- **Benchmark de embeddings (2026-10-10, parcial).** Tarea: ordenar los
+  vínculos gold proyecto↔publicación por encima de los demás candidatos del
+  mismo coordinador (169 proyectos, 3 694 pares). Titan v2 AUC 0.763 vs.
+  bge-m3 local 0.754: empate práctico. **Cohere no se pudo medir**: desde la
+  cuenta local (usuario IAM `HARVY`) Bedrock devuelve `AccessDeniedException`
+  por falta de permisos de AWS Marketplace (`aws-marketplace:Subscribe`);
+  hay que pedirlos o correr el benchmark desde el EC2. Scripts en el
+  scratchpad de la sesión, no en el repo.
+- **¿Publicaron lo que propusieron? (2026-10-10, piloto local con bge-m3).**
+  Sí, de forma muy clara: comparando el texto del proyecto (título + resumen
+  CRIS + palabras clave) con cada publicación que declaró, la propia
+  publicación queda en el top 10% de las 433 publicaciones ligadas en el 94%
+  de los 363 vínculos (mediana: percentil 99.8), sin diferencias entre áreas.
+  Los casos menos alineados son desplazamientos dentro del mismo campo, no
+  errores. Falta repetirlo con los embeddings de Cohere del pipeline.
+- `docs/formulas_cuantificacion.tex` compilado (MiKTeX); PDF en
+  `docs/formulas_cuantificacion.pdf`. El ejemplo trabajado es de
+  `full-proj-409`; el texto ahora lo dice, pero sus números no son los del
+  atlas actual.
 
 ## Avisos que deben acompañar cualquier informe
 
