@@ -18,6 +18,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import lb_titles
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Marcadores de "vacio" que aparecen en los CSV de origen y que NO deben
@@ -292,6 +294,12 @@ def aux_text(domain: Domain, aux_rows: list[dict]) -> tuple[list[str], list[str]
         for column in domain.aux_text_columns:
             value = clean_value(row.get(column))
             if not value:
+                continue
+            # El openalex_abstract emparejado por titulo sin verificar es de otra
+            # obra en ~3 de cada 4 casos (hallazgo 2026-10-10): solo se usa si
+            # vino por DOI o el titulo de la obra coincide con el declarado.
+            if column == "openalex_abstract" and not lb_titles.openalex_abstract_is_valid(
+                    row, clean_value(row.get("result_title"))):
                 continue
             parts.append(value)
             sources.append(f"aux:{column}")

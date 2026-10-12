@@ -1,20 +1,34 @@
-# Estado del pipeline de temas — 2026-09-30
+# Estado del pipeline de temas — 2026-10-12
 
 ## Corridas vigentes (las que usa el atlas publicado)
 
 | | proyectos | publicaciones ligadas |
 |---|---|---|
-| run_id | `full-proj-646` | `publications_linked-529` |
-| unidades | 646 | 529 |
-| temas normalizados | 136 | 101 |
-| `PC` normalizado | 0.3887 | 0.4612 |
+| run_id | `full-proj-20261011` | `publications_linked-20261011` |
+| unidades | 653 | 462 |
+| temas normalizados | 137 | 93 |
+| `PC` normalizado | 0.3901 | 0.4647 |
+
+Atlas publicado (versión 22, 2026-10-12): https://claude.ai/artifact/2NWxFbYtfyhtLhjPMUYyFU
+— compartido con cualquiera que tenga el enlace.
 
 Universo **filtrado por el mínimo declarado** (no todo lo que hay en PULSO
-entra): proyectos con `title` + `cris_abstract` (975 → 646); publicaciones
+entra): proyectos con `title` + `cris_abstract` (975 → 653); publicaciones
 ligadas con `title` + `abstract`, sin exigir que el proyecto que la declaró
-también califique (1 192 → 529). Detalle completo del embudo y por qué se
+también califique (1 192 → 462). Detalle completo del embudo y por qué se
 decidió así: `docs/cuantificacion_temas.md` §7, o la pestaña **Datos de
 origen** del atlas.
+
+**Cambio 2026-10-11 (re-corridas `*-20261011`)**: (1) el merge CRIS aplica los
+overrides manuales → 646 a 653 proyectos; (2) la cascada de publicaciones
+descarta los abstracts de OpenAlex emparejados por título que eran de otra obra
+(98) y suma 30 abstracts recuperados de Semantic Scholar/Crossref/OpenAlex con
+el título verificado → 529 a 462 publicaciones. Control de "misma obra" en
+`scripts/lib/lb_titles.py` (más estricto que la primera versión del 10-10, que
+dejaba pasar «EPICICLOS» → un artículo sobre Copérnico). Reuso por texto
+idéntico (`seed_same_text.py`): solo se extrajeron 32 unidades; ~USD 1.25 y 14
+min en total con `scripts/pipeline_temas/rerun_universos.sh`. Las corridas
+`full-proj-646` y `publications_linked-529` siguen en RDS.
 
 **Cambio de criterio 2026-09-29**: un nuevo export CRIS
 (`datos/ProyectosPUCPCRIS-20260929.csv`) llevó `cris_abstract` de 0.9 % a
@@ -48,19 +62,30 @@ el criterio viejo (409, 121 temas: `full-proj-409`), publicaciones sin filtro
 criterio intermedio title+abstract+keywords+proyecto-padre-409 (300, 85
 temas: `publications_linked-308`).
 
-## Cruce con Objetivos Nacionales (PEDN 2050 / CEPLAN): hecho e integrado al atlas
+## Cruce unidad ↔ sub-temática del PEDN 2050 (CEPLAN): hecho, validado y en el atlas
 
-`scripts/lib/lb_ceplan.py` + `scripts/analysis/ceplan_alignment.py`. Cada tema
-normalizado (de ambos dominios, por separado) comparado contra las 126
-sub-temáticas de `Líneas de Inv.` del PEDN 2050. Salidas en
-`salidas/topics/<dominio>/<run>/06_ceplan_alignment.json` y
-`reporte_ceplan_alignment.md`. Detalle metodológico y un hallazgo a reportar
-(la lectura fina y la gruesa discrepan ~1/3 de las veces): §8 de
-`docs/cuantificacion_temas.md`. Integrado al atlas HTML: chip "ON" en el
-detalle de cada tema, más pestaña propia **Objetivos Nacionales**
-(`build_atlas.py::attach_ceplan`/`renderCeplan`). Re-corrido el 2026-09-30
-contra `full-proj-646` (antes `full-proj-409`) y `publications_linked-529`
-(antes `publications_linked-308`).
+Responde «¿qué sub-temáticas desarrolla este proyecto/publicación?» (hasta 5) y
+«¿quién desarrolla esta sub-temática, y cuál no desarrolla nadie?», con
+porcentajes en las dos direcciones. `scripts/analysis/ceplan_units.py`:
+candidatas por embeddings (piso 0.40, en las dos direcciones) verificadas por
+Llama 4 Maverick (grado 0/1/2). Método: `docs/cuantificacion_temas.md` §8;
+calibración, benchmark de 7 modelos contra 100 pares humanos y validación:
+`EXPERIMENTS.md` §6.
+
+- **Precisión validada a mano: 84 %** de los vínculos listados (130 vínculos,
+  24 unidades al azar). El «clara» del modelo equivale a «relación real» (91 %),
+  no a desarrollo claro (53 %).
+- Corridas `*-20261011`: proyectos 624/653 con alguna sub-temática (96 %),
+  publicaciones 325/462 (70 %). Solo *Minería ilegal* no tiene relación clara
+  en ningún dominio.
+- Salidas: `salidas/topics/<dominio>/<run>/07_ceplan_units.json`,
+  `ceplan_por_unidad.csv`, `ceplan_por_subtematica.csv`,
+  `reporte_ceplan_unidades.md`; conjunta en `salidas/topics/ceplan/`.
+- **Retirado** del atlas el cruce anterior tema ↔ sub-temática
+  (`ceplan_alignment.py`, `06_ceplan_alignment.json`); el script se conserva.
+- Páginas de etiquetado usadas (privadas): gold
+  https://claude.ai/artifact/DiqPaU5KD9onDuJrjJzxMp, validación
+  https://claude.ai/artifact/HSpqRsCk1Demg2PNxFCrgM.
 
 ## Cómo relanzar algo desde cero
 
@@ -74,24 +99,34 @@ Sobrevive al cierre de la terminal si se lanza con
 `setsid nohup ... > /dev/null 2>&1 &`. Progreso: `./estado.sh`,
 `tail -f salidas/topics/<dominio>/ultimo.log`.
 
-## Cómo relanzar tras cambiar el universo (sin repagar Bedrock)
+## Cómo relanzar tras cambiar insumos o universo (sin repagar Bedrock)
 
-Si solo cambia QUÉ unidades entran (no su texto), reusar la extracción y los
-embeddings de una corrida anterior en vez de volver a pagarlos. **No aplica**
-si también cambia el texto embebido (p.ej. columnas nuevas o quitadas del
-embedding, como pasó el 2026-09-29 con `projects`): ahí hay que reextraer
-desde cero con `run_domain.py` sin `--from 03`.
+Todo de una vez, sin sesión interactiva (merge CRIS → cascada de
+publicaciones → etapas 01–05 de ambos dominios → cruce CEPLAN → atlas):
+
+```bash
+cd ~/LibroBlanco
+OLD_PROJ=full-proj-20261011 OLD_PUBS=publications_linked-20261011 \
+  setsid nohup scripts/pipeline_temas/rerun_universos.sh > /dev/null 2>&1 &
+tail -f salidas/topics/rerun_universos.log   # termina en rerun_universos.DONE o .FAILED
+```
+
+Reusa la extracción y el embedding **solo de las unidades con texto idéntico**
+(`seed_same_text.py`), así que es correcto aunque cambie el texto de algunas.
+Si falla, relanzar con el mismo `TAG=<fecha>`: cada paso retoma desde su cache.
+Publicar el atlas (`salidas/topics/atlas.html`) es aparte, desde una sesión.
+
+Por dominio, a mano:
 
 ```bash
 python3 scripts/pipeline_temas/01_prep_units.py --domain <dominio> --run-id <nuevo>
-python3 scripts/pipeline_temas/seed_from_run.py --domain <dominio> \
+python3 scripts/pipeline_temas/seed_same_text.py --domain <dominio> \
     --from-run <corrida_anterior> --to-run <nuevo>
-python3 scripts/pipeline_temas/run_domain.py --domain <dominio> --run-id <nuevo> --from 03
+python3 scripts/pipeline_temas/run_domain.py --domain <dominio> --run-id <nuevo> --from 02
 ```
 
-`seed_from_run.py` copia `extracted_topics` y `unit_embeddings` para las
-unidades que sobreviven al cambio de universo; solo se recalcula lo que
-depende del resto del corpus (agrupamiento, cuantificación).
+`seed_from_run.py` (el original) copia por unit_id sin mirar el texto: usarlo
+solo si el texto de las unidades que sobreviven no cambió.
 
 ## El problema de memoria: resuelto (hallazgo permanente, no cambia con las corridas)
 
@@ -120,37 +155,24 @@ OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
   (Scopus/OpenAlex/PubMed). Sí hay ~347 abstracts recuperables en el catálogo
   general de publicaciones (13 995, no ligadas a un proyecto), pero eso no es
   parte del universo que se usa hoy. No hace falta volver a correr nada.
-- **Re-correr `publications_linked` (y `projects`) en el servidor** tras los
-  cambios del 2026-10-10 en `rebuild_linked_publications.py` y
-  `merge_cris_stdlib.py` (detalle abajo). Ninguno se ha corrido todavía contra
-  RDS: el atlas publicado sigue en `full-proj-646` / `publications_linked-529`.
-  Orden: `merge_cris_stdlib.py` → `rebuild_linked_publications.py` →
-  `run_domain.py` para cada dominio (reextracción desde cero en
-  `publications_linked`: cambia el texto de 98 unidades, no solo el universo).
-  Después, actualizar los números escritos a mano en
-  `build_atlas.py::provenance_notes`.
-- **Hallazgo 2026-10-10 — resúmenes OpenAlex de otra obra.** La etapa de
-  enriquecimiento (`openalex_helpers.build_openalex_query`, `search.exact`,
-  `per-page=1`) toma el primer resultado de la búsqueda por título sin
-  verificarlo. De los 113 resúmenes OpenAlex emparejados por título que
-  entraban al universo de `publications_linked`, 98 eran de otra obra
-  (similitud de título < 0.85, revisado a mano; p.ej. "EXONERADO" → un
-  artículo sobre Carlos II). `rebuild_linked_publications.py` ahora los
-  descarta (`OPENALEX_MIN_TITLE_SIM`); el universo pasa de 531 a **433**
-  publicaciones. Los emparejados por DOI no se tocan. Pendiente: corregir en
-  origen (`openalex_helpers`) y revisar lo que deriva de esas columnas: el
-  texto auxiliar de `projects` (`aux:openalex_abstract`, solo para proyectos
-  con `cris_abstract` < 200 caracteres) y las cifras de OpenAlex de las
+- **Avisar al equipo de las 98 publicaciones** con abstract de otra obra: el
+  archivo de datos faltantes que se compartió las cuenta como "con abstract".
+- **Corregir en origen la búsqueda de OpenAlex por título**
+  (`openalex_helpers.build_openalex_query`: `search.exact`, `per-page=1`, toma
+  el primer resultado sin verificarlo) usando `lb_titles.same_work`. Ya está
+  filtrado aguas abajo (cascada de publicaciones y texto auxiliar de
+  `projects`, que hoy no afecta a ningún proyecto), pero las columnas siguen
+  sucias en `salidas/06_*` y `07_*_ground_truth.csv`: además del abstract, 84
+  publicaciones tienen un `openalex_doi` que viene de ese emparejamiento sin
+  verificar (solo 2 coinciden). Revisar también las cifras de OpenAlex de las
   láminas del 15-08 (autores, revista, país).
-- **Cambios 2026-10-10 en la cascada de `publications_linked`**: además del
-  filtro anterior, toma resúmenes de la hoja `Pubs_WoS` (+2) y palabras clave
-  de `Pubs_RI`/`Pubs_WoS`/VRI-DFI (+56) del Excel de PULSO, con columna nueva
-  `keywords_source`.
-- **Cambios 2026-10-10 en `merge_cris_stdlib.py`**: conserva `cris_uuid` (también
-  `merge_cris.py`) y aplica los overrides manuales `match`/`skip` de
-  `datos/cris_overrides.csv`, como ya hacía la versión con pandas. Efecto: los
-  11 proyectos emparejados a mano reciben los datos del export del 29-set;
-  proyectos con `cris_abstract` pasan de 646 a **653**.
+- **12 abstracts recuperados por decidir** (`salidas/abstracts_recuperados/
+  candidatos.csv`, veredicto `revisar`): probablemente la misma obra con otro
+  título (p.ej. charla de congreso publicada luego como artículo). Si se
+  aceptan, cambiar el veredicto a `aceptar` y relanzar `rerun_universos.sh`.
+- **59 publicaciones con palabras clave pero sin abstract** quedan fuera del
+  universo; entrarían si el mínimo aceptara título + palabras clave. Decisión
+  de criterio pendiente.
 - **Limpieza de disco pendiente de decisión** (nada de esto está en git, es
   solo espacio en el servidor). Ojo antes de borrar: `salidas/libro_blanco.db`
   (74 MB) no es solo histórico, la leen `pipeline/02_match_candidates.py` y
@@ -197,8 +219,8 @@ OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
 
 ## Git
 
-Commits recientes en `main`, ya en sync con `origin/main` hasta `8dec04b`. Lo
-de esta sesión (merge del export CRIS 2026-09-29, cambio de criterio de
-`projects` y de `publications_linked`, re-corridas `full-proj-646` y
-`publications_linked-529`, re-alineación CEPLAN, esta actualización de docs)
-sigue sin commitear — ver `git status`.
+`main` en sync con `origin/main` hasta `d2806ad` (2026-10-10). Sin commitear
+(2026-10-12): control de títulos `lb_titles.py`, paso `externo` de la cascada,
+`seed_same_text.py`, `rerun_universos.sh`, `recover_abstracts_external.py`,
+conteos del atlas calculados, aviso de precisión en la pestaña CEPLAN,
+EXPERIMENTS.md §6.5 y esta actualización de docs — ver `git status`.

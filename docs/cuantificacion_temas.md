@@ -139,23 +139,27 @@ por qué se llega a esta población —de dónde sale cada número del embudo,
 cuántos caracteres de texto quedó por unidad— está en la pestaña **Datos de
 origen** del atlas publicado, no repetido aquí.
 
-| | proyectos (`full-proj-646`) | publicaciones ligadas (`publications_linked-529`) |
+| | proyectos (`full-proj-20261011`) | publicaciones ligadas (`publications_linked-20261011`) |
 |---|---:|---:|
-| unidades | 646 | 529 |
-| temas extraídos por el LLM | 1 951 | 1 456 |
-| temas normalizados | **136** | **101** |
-| umbrales calibrados (líder / fusión) | 0.570 / 0.631 | 0.555 / 0.623 |
-| tamaño de grupo (máx / mediana) | 80 / 11 | 57 / 10 |
-| celdas no nulas · densidad | 5 261 · 5.99 % | 4 273 · 8.00 % |
-| `PC` (normalizado) | 0.3932 (0.3887) | 0.4665 (0.4612) |
-| entropía normalizada | 0.2743 | 0.2568 |
-| temas efectivos por unidad | 2.96 | 2.53 |
-| unidades efectivas por tema | 12.9 | 12.3 |
+| unidades | 653 | 462 |
+| temas extraídos por el LLM | 1 969 | 1 309 |
+| temas normalizados | **137** | **93** |
+| umbrales calibrados (líder / fusión) | 0.570 / 0.636 | 0.556 / 0.631 |
+| tamaño de grupo (máx / mediana) | 72 / 11 | 56 / 10 |
+| celdas no nulas · densidad | 5 327 · 5.95 % | 3 736 · 8.70 % |
+| `PC` (normalizado) | 0.3945 (0.3901) | 0.4705 (0.4647) |
+| entropía normalizada | 0.2731 | 0.2583 |
+| temas efectivos por unidad | 2.92 | 2.49 |
+| unidades efectivas por tema | 12.9 | 11.6 |
 
 Los dos `PC` normalizados caen en la franja informativa (0.2 – 0.8): la
 partición es difusa de verdad, y las dos lecturas dicen cosas distintas.
 
-*(Corridas anteriores, intactas en RDS por si hace falta comparar: proyectos
+*(Corridas anteriores, intactas en RDS por si hace falta comparar:
+`full-proj-646` —646 proyectos, 136 temas, antes de aplicar los overrides
+manuales de CRIS— y `publications_linked-529` —529 publicaciones, 101 temas;
+98 de ellas tenían un abstract de OpenAlex que era de otra obra, ver \S7—;
+proyectos
 sin filtro de calidad —975, 160 temas: `full-proj-975`—; proyectos con el
 criterio viejo —409, `title`+`knowledge_area`+línea de investigación, 121
 temas: `full-proj-409`—, reemplazado el 2026-09-29 cuando un nuevo export
@@ -218,7 +222,9 @@ aun así no ser parte del universo si no cumple un mínimo de calidad de dato.
 - **Proyectos**: cerrado (`Estado = "5. Cerrado"`) y `year ≥ 2010` (ya
   aplicado en `salidas/01_projects_closed_con_cris.csv`), **y** `title`, **y**
   `cris_abstract`. De 1 928 proyectos registrados en PULSO, 975 quedan
-  cerrados/2010+, y de esos, **646** cumplen las dos.
+  cerrados/2010+, y de esos, **653** cumplen las dos (646 hasta el
+  2026-10-11, cuando `merge_cris_stdlib.py` empezó a aplicar los overrides
+  manuales de `datos/cris_overrides.csv`).
 
   Este criterio reemplazó, el 2026-09-29, al que exigía `title` +
   `knowledge_area` + al menos una línea de investigación (dejaba 409). El
@@ -240,9 +246,25 @@ aun así no ser parte del universo si no cumple un mínimo de calidad de dato.
   carácter.
 - **Publicaciones ligadas**: `title` **y** `abstract`, aplicado directo sobre
   las 1 192 publicaciones declaradas como resultado de un proyecto del
-  universo. De esas, 538 filas cumplían las dos por su propio texto, y tras
-  deduplicar por publicación (9 comparten `publication_id` con otra)
-  quedaban **529** distintas.
+  universo. Hoy 471 filas cumplen las dos y, tras deduplicar por publicación,
+  quedan **462** distintas (corrida `publications_linked-20261011`).
+
+  Hasta el 2026-10-10 eran 529, pero 98 de ellas tenían un abstract que no
+  era suyo: la etapa de enriquecimiento buscaba la obra en OpenAlex por
+  título y tomaba el primer resultado sin verificarlo (p.ej. el título de
+  relleno «EXONERADO» trajo el resumen de un artículo sobre Carlos II). Desde
+  entonces, un abstract obtenido por título solo se acepta si el título de la
+  obra hallada coincide con el declarado (`scripts/lib/lb_titles.py`: misma
+  obra si la similitud de secuencia ≥ 0.85, o si el título corto tiene al
+  menos 3 palabras de contenido, al menos la mitad del largo del otro y el
+  85 % de ellas aparecen en él; la primera versión de este control aceptaba
+  títulos cortos contenidos en otra obra, como «EPICICLOS» → un artículo sobre
+  Copérnico y Kepler). Se sumaron 30 abstracts buscados por DOI o título en
+  Semantic Scholar, Crossref y OpenAlex con ese mismo control
+  (`scripts/addons/recover_abstracts_external.py`, paso `externo` de la
+  cascada): de 369 publicaciones sin abstract pero con algo con qué buscar,
+  49 dieron resultado; 30 coincidían sin duda, 12 eran probablemente la misma
+  obra con otro título y no se incluyeron, y 7 eran otra obra.
 
   Hasta el 2026-09-29 (`publications_linked-308`) el criterio era más
   estricto en dos sentidos, ambos revertidos el 2026-09-30: (1) exigía
@@ -283,35 +305,108 @@ cero en ambos casos: `full-proj-646` (~USD 4.74) y `publications_linked-529`
 (~USD 3.38); ninguno de los dos es costoso a esta escala, así que no se
 invirtió en extender el script para este caso.
 
+Desde el 2026-10-11 hay una variante que cubre los dos casos:
+`scripts/pipeline_temas/seed_same_text.py` compara el texto de cada unidad
+entre la corrida vieja y la nueva y reusa la extracción y el embedding **solo
+de las idénticas**, sin importar si el universo crece, se achica o cambia de
+texto; la etapa 02 consulta al LLM solo por las nuevas o cambiadas.
+`scripts/pipeline_temas/rerun_universos.sh` encadena todo (merge CRIS →
+cascada de publicaciones → etapas 01–05 por dominio con ese reuso → cruce
+CEPLAN → atlas) y corre sin sesión interactiva. Así se hicieron
+`full-proj-20261011` (7 unidades nuevas de 653) y
+`publications_linked-20261011` (25 nuevas de 462): ~USD 1.25 en total, 14
+minutos.
+
 ## 8. Cruce con los Objetivos Nacionales (PEDN 2050 / CEPLAN)
 
-Encargo del equipo: introducir la matriz CEPLAN/PEDN 2050
-(`datos/PEDN2050.xlsx`) y ver dónde se clasifica mejor cada tema normalizado
-—de proyectos y de publicaciones, por separado— contra los 4 Objetivos
-Nacionales (ON).
+Preguntas del encargo, por dominio (proyectos y publicaciones, por separado):
 
-CEPLAN no pasa por el pipeline de extracción por LLM: su taxonomía (ON →
-Temática → Sub-temática, hoja `Líneas de Inv.` del libro, 126 sub-temáticas
-sobre 4 ON) ya es oficial y está nombrada por CEPLAN mismo, así que solo hace
-falta embeberla con el mismo modelo que embebió los temas
-(`cohere.embed-multilingual-v3`) para poder comparar. Implementación:
-`scripts/lib/lb_ceplan.py` (parseo) y
-`scripts/analysis/ceplan_alignment.py` (comparación + reporte).
+- **¿Qué sub-temáticas del PEDN 2050 desarrolla este proyecto?** Hasta 5, con
+  un mínimo de relación, no una sola.
+- **¿Qué proyectos desarrollan esta sub-temática?** Y cuáles no desarrolla
+  nadie.
 
-Por cada tema normalizado se reporta su mejor sub-temática (la lectura más
-específica), la Temática y el ON que implica, el score contra el centroide
-del ON directamente, y el top-3. Antes de confiar en el ranking se valida que
-los scores no estén comprimidos (ya pasó con otro modelo, en otro corpus:
-`salidas/topics/policy_alignment_model_comparison_summary.md`, ahora
-retirado) — en esta corrida el rango es 0.46–0.78, comparable al de la
-similitud interna del propio agrupamiento, así que el ranking es señal real.
+Taxonomía: hoja `Líneas de Inv.` de `datos/PEDN2050.xlsx`, 126 sub-temáticas
+sobre 4 Objetivos Nacionales (ON) → Temática → Sub-temática, enriquecidas con
+el Objetivo Específico y las Acciones Estratégicas de las hojas `ON 1`..`ON 4`
+(`scripts/lib/lb_ceplan.py`). CEPLAN no pasa por la extracción por LLM: su
+taxonomía ya es oficial.
 
-Un hallazgo a tener en cuenta al reportar: el ON implicado por la mejor
-sub-temática solo coincide con el ON de mayor similitud directa en 92/136
-temas de proyectos (68 %) y 59/101 de publicaciones (58 %) — las dos lecturas
-(fina y gruesa) genuinamente discrepan en cerca de un tercio de los casos; los
-reportes (`06_ceplan_alignment.json` / `reporte_ceplan_alignment.md` por
-dominio) marcan cada discrepancia en vez de resolverla en silencio.
+### 8.1 Método (`scripts/analysis/ceplan_units.py`)
 
-No se compara con ningún otro plan o política más allá del PEDN 2050 — eso
-sigue fuera de alcance.
+1. **Candidatas por embeddings, en las dos direcciones.** Similitud coseno
+   entre el embedding de cada unidad (el mismo de la etapa 03) y el de cada
+   sub-temática, tomando la mayor entre su texto en español y una traducción
+   al inglés (las publicaciones en inglés puntúan ~0.15 menos contra texto en
+   español; traducción cacheada en `salidas/topics/ceplan/subtematicas_en.json`).
+   - Por unidad: sus 8 sub-temáticas más cercanas con similitud ≥ 0.40.
+   - Por sub-temática: sus 10 unidades más cercanas sobre el piso, con un
+     tope de 6 agregadas por unidad. Sin esta vía inversa, las sub-temáticas
+     que puntúan bajo contra todo (p.ej. «Saneamiento») no entraban al top de
+     ninguna unidad aunque un proyecto de agua potable puntuara 0.65 contra
+     ellas: aparecían como huecos que eran solo de recuperación.
+2. **Verificación por LLM.** `us.meta.llama4-maverick-17b-instruct-v1:0` lee
+   el texto de la unidad y califica cada candidata: 2 = la desarrolla
+   claramente, 1 = relación tangencial, 0 = sin relación. Elegido con un
+   benchmark de 7 modelos contra 100 pares calificados a mano
+   (EXPERIMENTS.md §6): ningún modelo resultó mejor que otro con significancia,
+   Sonnet 5 nunca fue mejor que los baratos, y Llama 4 Maverick quedó en el
+   grupo de arriba al costo más bajo útil (~USD 0.30 por corrida completa).
+3. **Cuantificación bidireccional**, la misma de §2 sobre otra matriz:
+   `w[u,s] = peso(grado) × (similitud − 0.40)`, con peso 1 para grado 2 y 0.5
+   para grado 1, solo en vínculos confirmados. *Cuánto de la unidad es la
+   sub-temática* suma 100 % por unidad; *cuánto de la sub-temática aporta la
+   unidad* suma 100 % por sub-temática. El listado por unidad muestra sus 5
+   vínculos de mayor contención, pero el 100 % se reparte entre todos los
+   confirmados, y la pregunta inversa usa todos.
+4. **Cobertura** de cada sub-temática, contando solo vínculos de grado 2:
+   *desarrollada* (≥ 3 unidades), *débil* (1–2), *sin desarrollo* (ninguna;
+   puede tener tangenciales).
+
+Salidas por dominio y corrida: `07_ceplan_units.json` (con todas las
+candidatas evaluadas y su grado), `ceplan_por_unidad.csv`,
+`ceplan_por_subtematica.csv`, `reporte_ceplan_unidades.md`; cobertura conjunta
+en `salidas/topics/ceplan/reporte_cobertura.md`. En el atlas: pestaña
+**Objetivos Nacionales** y bloque de sub-temáticas en el detalle de cada unidad.
+
+### 8.2 Validación (EXPERIMENTS.md §6.5)
+
+130 vínculos de 24 unidades elegidas al azar, calificados a ciegas:
+
+- **84 % de los vínculos listados tienen una relación real** (proyectos 82 %,
+  publicaciones 86 %).
+- De los que el modelo marca «clara», el 91 % tiene relación real, pero solo
+  el 53 % es «clara» para la persona. Por eso *desarrollada* se lee como
+  «al menos 3 unidades con una relación de alta confianza», no como desarrollo
+  claro.
+- Lo que el modelo rechaza es casi siempre tangencial: de 24 candidatas
+  rechazadas, solo 2 eran relaciones claras.
+
+La validación se hizo sobre las corridas `full-proj-646` /
+`publications_linked-529`; el método no cambió en las de 2026-10-11.
+
+### 8.3 Resultado actual (corridas `full-proj-20261011`, `publications_linked-20261011`)
+
+| | Proyectos | Publicaciones |
+|---|---|---|
+| Con al menos una sub-temática | 624 / 653 (96 %) | 325 / 462 (70 %) |
+| Vínculos claros / tangenciales | 1 722 / 1 460 | 757 / 857 |
+| Sub-temáticas desarrolladas / débiles / sin desarrollo | 102 / 22 / 2 | 76 / 37 / 13 |
+
+Entre los dos dominios, solo *Minería ilegal* (ON3) no tiene ninguna relación
+clara. Los huecos de publicaciones se concentran en ON3 (empleo decente,
+MIPYME, turismo, transporte).
+
+### 8.4 Qué no hace
+
+- No mide si un proyecto *debería* desarrollar una sub-temática: solo si su
+  texto (título, resumen, palabras clave) la toca.
+- Una unidad sin candidatas sobre el piso queda sin sub-temática (4 proyectos,
+  sobre todo matemática pura); es lo esperable en investigación básica.
+- No se compara con ningún otro plan o política más allá del PEDN 2050.
+
+**Retirado**: la versión anterior de este cruce comparaba cada *tema
+normalizado* con las sub-temáticas (`scripts/analysis/ceplan_alignment.py`,
+`06_ceplan_alignment.json`). Respondía otra pregunta (¿a qué sub-temática se
+parece este tema?) y no decía qué desarrolla cada proyecto; ya no se muestra en
+el atlas. El script y sus salidas se conservan.

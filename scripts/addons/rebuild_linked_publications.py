@@ -16,8 +16,8 @@ Cascada de procedencia (se para en la primera que da texto util, >80 chars):
                      asi que no estaba disponible cuando se armaron)
   3. resumen         `07_..._ground_truth.csv`, resumen humano por DOI
   4. openalex        idem, reconstruido del abstract_inverted_index. Solo si la
-                     obra se emparejo por DOI, o por titulo con similitud
-                     >= OPENALEX_MIN_TITLE_SIM: la busqueda por titulo de la
+                     obra se emparejo por DOI, o por titulo con
+                     lb_titles.same_work: la busqueda por titulo de la
                      etapa de enriquecimiento toma el primer resultado sin
                      verificarlo, y en ~3 de cada 4 casos es otra obra (p.ej.
                      el titulo de relleno "EXONERADO" trajo el resumen de un
@@ -25,6 +25,11 @@ Cascada de procedencia (se para en la primera que da texto util, >80 chars):
   5. source          idem, abstract de la fuente original (WoS/RI)
   6. pulso_wos       hoja `Pubs_WoS` del Excel de PULSO, por DOI o titulo
   7. vri_dfi         `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
+  8. externo         `salidas/abstracts_recuperados/candidatos.csv`, filas con
+                     veredicto "aceptar": abstracts buscados por DOI/titulo en
+                     Semantic Scholar, Crossref, OpenAlex y Google Books
+                     (scripts/addons/recover_abstracts_external.py), con el
+                     titulo hallado verificado contra el declarado.
 
 Palabras clave, cuando faltan en master/ground-truth, en este orden:
 doi-resultados-final.csv (por DOI), hojas `Pubs_RI` (`key_words`) y `Pubs_WoS`
@@ -58,6 +63,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 import lb_domains  # noqa: E402
+import lb_titles   # noqa: E402
 
 GT = ROOT / "salidas" / "07_project_publication_ground_truth.csv"
 MASTER = ROOT / "salidas" / "03_publications_master.csv"
@@ -71,7 +77,8 @@ MIN_CHARS = 80   # por debajo de esto no es un abstract, es un resto
 # Revisado a mano contra los 113 emparejamientos por titulo: por debajo de esto
 # eran todos otra obra; los emparejados por DOI con similitud baja eran la
 # misma obra con el titulo traducido, por eso el DOI no pasa por este filtro.
-OPENALEX_MIN_TITLE_SIM = 0.85
+OPENALEX_MIN_TITLE_SIM = lb_titles.MIN_SEQUENCE
+EXTERNAL = ROOT / "salidas" / "abstracts_recuperados" / "candidatos.csv"
 
 
 def norm_title(text: str) -> str:
@@ -112,13 +119,22 @@ def load_doi_resultados() -> dict[str, dict]:
 
 
 def title_similarity(a: str, b: str) -> float:
-    """Mayor entre la similitud de secuencia y el solapamiento de palabras
-    (sobre el titulo mas corto, para tolerar subtitulos agregados)."""
-    a, b = norm_title(a), norm_title(b)
-    if not a or not b:
-        return 0.0
-    ta, tb = set(a.split()), set(b.split())
-    return max(SequenceMatcher(None, a, b).ratio(), len(ta & tb) / min(len(ta), len(tb)))
+    """Ver lb_titles.title_match. La version anterior medía el solapamiento de
+    palabras sobre el titulo mas corto sin minimo de palabras y aceptaba
+    titulos cortos contenidos en otra obra ("EPICICLOS" -> un articulo sobre
+    Copernico y Kepler)."""
+    return lb_titles.title_match(a, b)
+
+
+def load_external() -> dict[str, dict]:
+    """publication_id -> {abstract, fuente} de los abstracts recuperados aceptados."""
+    if not EXTERNAL.exists():
+        return {}
+    out = {}
+    for row in read_csv(EXTERNAL):
+        if (row.get("veredicto") or "").strip() == "aceptar" and useful(row.get("abstract")):
+            out[row["publication_id"]] = {"abstract": row["abstract"], "fuente": row.get("fuente", "")}
+    return out
 
 
 def load_openalex_titles() -> dict[tuple[str, str], str]:
@@ -195,6 +211,9 @@ def main():
         print(f"AVISO: no se encontro {OPENALEX_RAW.name}; no se puede verificar el titulo de los "
               "emparejamientos OpenAlex por titulo, asi que se descartan todos los que no sean por DOI.")
     openalex_rejected = 0
+    external = load_external()
+    print(f"abstracts recuperados externamente (aceptados): {len(external)}"
+          if external else f"{EXTERNAL.name} no encontrado o sin aceptados; se omite el paso externo.")
     vri, vri_kw = {}, {}
     if VRI.exists():
         for row in read_csv(VRI):
@@ -251,6 +270,7 @@ def main():
             (record.get("source_abstract"), "source"),
             (next((h["abstract"] for h in pulso_hits if h["abstract"]), ""), "pulso_wos"),
             (vri.get(norm_title(title)) if title else "", "vri_dfi"),
+            ((external.get(row_id) or {}).get("abstract"), "externo"),
         ):
             text = useful(candidate)
             if text:

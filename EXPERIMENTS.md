@@ -379,6 +379,34 @@ domain where Llama fails (rerunning with Haiku 4.5 or Nova Pro costs cents).
 Optional: a second annotator on ~40 of the 100 gold pairs, to measure the
 human ceiling.
 
+### 6.5 Validation on the production output (2026-10-10)
+
+`scripts/analysis/ceplan_validation.py`: 24 random aligned units (12 per
+domain) from the `full-proj-646` / `publications_linked-529` CEPLAN run, with
+each unit's listed links (up to top 5) plus its highest-similarity rejected
+candidate; 130 pairs graded blind by the same annotator as §6.2. Wilson 95%
+intervals.
+
+| Llama grade | n | Human: 0 / 1 / 2 | Human sees a relation (≥ 1) |
+|---|---:|---|---|
+| 2 (clear) | 68 | 6 / 26 / 36 | **91%** [82–96%] |
+| 1 (tangential) | 38 | 11 / 25 / 2 | 71% [55–83%] |
+| 0 (rejected, best-scoring) | 24 | 13 / 9 / 2 | 46% [28–65%] |
+
+- **Precision of the published links (grade ≥ 1): 84%** (projects 82%,
+  publications 86%).
+- **Llama's "clear" means "real relation", not "clear"**: 91% of its grade-2
+  links are related for the human, but only 53% [41–64%] are clear for the
+  human. Coverage counts grade-2 links, so "desarrollada" should be read as
+  "≥ 3 units with a high-confidence relation", not "≥ 3 units that clearly
+  develop it".
+- **Misses are mostly tangential**: of the rejected candidates the human sees
+  as related, 9 of 11 are tangential; only 2 of 24 were clear misses.
+
+Caveat: these runs include publications whose abstract belonged to another
+work (fixed upstream in `d2806ad`); rerun the cross and, if the universe
+changes substantially, repeat the validation on the new runs.
+
 Side finding: the `us.` inference profile for Sonnet 5 bills the regional
 rate ($2.20 / $11 per M tokens); `global.anthropic.claude-sonnet-5` bills
 $2 / $10. Switching `bedrock.llm_model_id` saves 10% on future topic

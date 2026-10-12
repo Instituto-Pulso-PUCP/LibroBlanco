@@ -31,3 +31,6 @@ config/env.sh
 config/env.sh.bak
 
 datos/
+*.npz
+*.log
+salidas/
