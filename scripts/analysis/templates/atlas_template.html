@@ -226,6 +226,57 @@ details.subrow .inner{padding:0 13px 12px}
 details.subrow .inner .tablewrap{background:var(--surface)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:13px;color:var(--ink-2)}
 .filters label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+/* --- buscador global + filtro de años --- */
+.omni{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  margin:0 0 18px;box-shadow:0 1px 0 var(--line)}
+.omni-bar{display:flex;align-items:center;gap:10px;padding:4px 14px}
+.omni-bar svg{flex:none;color:var(--ink-3)}
+#omniq{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;
+  padding:11px 0;outline:none}
+#omniq::placeholder{color:var(--ink-3)}
+.omni:focus-within{border-color:var(--focus);box-shadow:0 0 0 3px var(--contain-soft)}
+.omni kbd{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-3);border:1px solid var(--line);
+  border-radius:4px;padding:1px 6px;background:var(--surface-2)}
+.omni-years{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:9px 14px 11px;
+  border-top:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+.omni-years .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.omni-years output{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink);
+  min-width:96px}
+.omni-years label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.omni-years .reset{appearance:none;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);
+  font:inherit;font-size:12px;border-radius:6px;padding:3px 9px;cursor:pointer}
+.omni-years .reset[hidden]{display:none}
+.omni-years .yr-note{font-size:12px;color:var(--ink-3)}
+.dual{position:relative;flex:1 1 220px;max-width:420px;height:26px}
+.dual .rail,.dual .fill{position:absolute;top:11px;height:4px;border-radius:2px}
+.dual .rail{left:0;right:0;background:var(--surface-2);border:1px solid var(--line)}
+.dual .fill{background:var(--contain)}
+.dual input{position:absolute;left:0;top:0;width:100%;height:26px;margin:0;background:none;
+  pointer-events:none;-webkit-appearance:none;appearance:none}
+.dual input::-webkit-slider-runnable-track{background:none;border:0}
+.dual input::-moz-range-track{background:none;border:0}
+.dual input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:16px;height:16px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--contain);cursor:grab;margin-top:0}
+.dual input::-moz-range-thumb{pointer-events:auto;width:13px;height:13px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--contain);cursor:grab}
+.dual input:focus-visible::-webkit-slider-thumb{outline:2px solid var(--focus);outline-offset:2px}
+.dual input:focus-visible::-moz-range-thumb{outline:2px solid var(--focus);outline-offset:2px}
+.omni-res{position:absolute;left:-1px;right:-1px;top:calc(100% + 6px);z-index:20;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.16);
+  max-height:min(70vh,560px);overflow-y:auto;padding:6px 0}
+.omni-res[hidden]{display:none}
+.omni-grp{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600;
+  padding:10px 16px 4px;display:flex;justify-content:space-between;gap:10px}
+.omni-item{display:block;padding:7px 16px;cursor:pointer;border-left:3px solid transparent}
+.omni-item[aria-selected="true"]{background:var(--surface-2);border-left-color:var(--contain)}
+.omni-item .ot{display:block;font-size:14px;line-height:1.35}
+.omni-item .om{display:block;font-size:11.8px;color:var(--ink-3);margin-top:1px}
+.omni-item mark{background:var(--contrib-soft);color:inherit;border-radius:2px;padding:0 1px}
+.omni-empty,.omni-help{padding:12px 16px;font-size:13px;color:var(--ink-3)}
+.omni-help code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--ink-2)}
+.yr-banner{font-size:12.5px;color:var(--ink-2);background:var(--contain-soft);border-radius:7px;
+  padding:7px 11px;margin:0 0 12px}
 footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-3);font-size:12.5px}
 footer p{margin:0 0 6px;max-width:78ch}
 @media (prefers-reduced-motion:no-preference){ .track i{transition:width .18s ease} }
@@ -234,6 +285,30 @@ footer p{margin:0 0 6px;max-width:78ch}
   <p class="eyebrow">Libro Blanco · Proyecto Pulso · PUCP</p>
   <h1>Atlas Temático PUCP</h1>
   <p class="sub">Cada proyecto y cada publicación se reparte entre varios temas.</p>
+
+  <div class="omni" id="omni">
+    <div class="omni-bar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="omniq" role="combobox" aria-expanded="false" aria-controls="omni-res"
+             aria-autocomplete="list" aria-label="Buscar en todo el atlas" autocomplete="off" spellcheck="false"
+             placeholder="Busca un proyecto, una publicación, un tema o una sub-temática CEPLAN…">
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <div class="omni-years">
+      <span class="lbl" id="yr-lbl">Años</span>
+      <div class="dual" id="yr-dual">
+        <div class="rail"></div><div class="fill" id="yr-fill"></div>
+        <input type="range" id="yr-lo" aria-label="Desde el año">
+        <input type="range" id="yr-hi" aria-label="Hasta el año">
+      </div>
+      <output id="yr-out" for="yr-lo yr-hi"></output>
+      <label><input type="checkbox" id="yr-nodate" checked> incluir sin año</label>
+      <button type="button" class="reset" id="yr-reset" hidden>Todos los años</button>
+      <span class="yr-note" id="yr-note"></span>
+    </div>
+    <div class="omni-res" id="omni-res" role="listbox" aria-label="Resultados" hidden></div>
+  </div>
 
   <div class="domains" role="group" aria-label="Universo a explorar">
     <button type="button" id="dom-projects" data-dom="projects" aria-pressed="true">Proyectos</button>
@@ -311,6 +386,88 @@ footer p{margin:0 0 6px;max-width:78ch}
     return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[m]; }); }
   function el(tag, cls, txt){ var e=document.createElement(tag); if(cls)e.className=cls;
     if(txt!=null)e.textContent=txt; return e; }
+  function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+  function plural(noun){ return noun.replace(/ción$/, 'cione') + 's'; }
+  function ningun(noun){ return (/ción$/.test(noun) ? 'Ninguna ' : 'Ningún ') + noun; }
+
+  // --- filtro de años -------------------------------------------------------
+  // Recalcula, para el rango elegido, lo mismo que la corrida calcula para todo
+  // el corpus: tamaño de tema = Σ contención de las unidades del rango, y el
+  // aporte se renormaliza para que vuelva a sumar 100 % dentro del rango.
+  var YR = (function(){
+    var lo = Infinity, hi = -Infinity;
+    Object.keys(DATA).forEach(function(d){
+      Object.keys(DATA[d].units).forEach(function(u){
+        var y = DATA[d].units[u].y;
+        if (y){ lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      });
+    });
+    if (lo === Infinity){ lo = hi = new Date().getFullYear(); }
+    return {min: lo, max: hi, lo: lo, hi: hi, nodate: true};
+  })();
+  function yrActive(){ return YR.lo > YR.min || YR.hi < YR.max || !YR.nodate; }
+  function yrKey(d){ return d + '|' + YR.lo + '|' + YR.hi + '|' + YR.nodate; }
+  function inYears(d, uid){
+    var u = DATA[d].units[uid], y = u && u.y;
+    if (!y) return YR.nodate;
+    return y >= YR.lo && y <= YR.hi;
+  }
+  function yrText(){ return YR.lo === YR.hi ? String(YR.lo) : YR.lo + '–' + YR.hi; }
+
+  var vcache = {};
+  function view(d){
+    var key = yrKey(d);
+    if (vcache[key]) return vcache[key];
+    var D = DATA[d], I = build(d), act = yrActive();
+    var V = {eq: {}, n: {}, byTopic: {}, nu: 0, nt: 0};
+    Object.keys(D.units).forEach(function(u){ if (inYears(d, u)) V.nu++; });
+    Object.keys(D.topics).forEach(function(t){
+      var rows = (I.byTopic[t] || []).filter(function(r){ return inYears(d, r.u); });
+      var s = rows.reduce(function(a, r){ return a + r.c; }, 0);
+      V.eq[t] = act ? s : D.topics[t].eq;
+      V.n[t] = act ? rows.length : D.topics[t].n;
+      V.byTopic[t] = !act ? rows : rows.map(function(r){ return {u: r.u, c: r.c, k: s ? r.c / s : 0}; })
+        .sort(function(a, b){ return b.k - a.k; });
+      if (V.n[t]) V.nt++;
+    });
+    if (!act){ V.nu = D.nu; V.nt = D.nt; }
+    return (vcache[key] = V);
+  }
+
+  function cview(d){
+    var key = 'c' + yrKey(d);
+    if (vcache[key]) return vcache[key];
+    var C = DATA[d].ceplan, act = yrActive(), V = {subs: {}, byOn: {}, aligned: 0, nu: 0};
+    Object.keys(C.subs).forEach(function(k){
+      var s = C.subs[k];
+      V.subs[k] = act ? {n: 0, n2: 0, eq: 0, cov: 'sin_desarrollo'} : {n: s.n, n2: s.n2, eq: s.eq, cov: s.cov};
+    });
+    Object.keys(C.status).forEach(function(u){ if (inYears(d, u)) V.nu++; });
+    Object.keys(C.units).forEach(function(u){
+      if (!inYears(d, u)) return;
+      V.aligned++;
+      if (!act) return;
+      C.units[u].forEach(function(r){
+        var s = V.subs[r[0]]; if (!s) return;
+        s.n++; if (r[1] === 2) s.n2++; s.eq += r[2];
+      });
+    });
+    Object.keys(V.subs).forEach(function(k){
+      var s = V.subs[k];
+      if (act) s.cov = s.n2 >= C.minG2 ? 'desarrollada' : (s.n2 > 0 ? 'debil' : 'sin_desarrollo');
+      var on = C.subs[k].o;
+      V.byOn[on] = (V.byOn[on] || 0) + s.eq;
+    });
+    if (!act) V.byOn = C.byOn;
+    return (vcache[key] = V);
+  }
+  function yrBanner(box, d, nIn, nAll){
+    if (!yrActive()) return;
+    var D = DATA[d];
+    box.appendChild(el('p', 'yr-banner', 'Años ' + yrText() + (YR.nodate ? ' (y sin año)' : '') + ': ' +
+      nIn.toLocaleString('es') + ' de ' + nAll.toLocaleString('es') + ' ' + plural(D.noun) +
+      '. Tamaños y aportes recalculados dentro del rango.'));
+  }
 
 
   var NAMES = {projects:'Proyectos', publications_linked:'Publicaciones de proyectos'};
@@ -534,10 +691,11 @@ footer p{margin:0 0 6px;max-width:78ch}
   }
 
   function renderMetrics(){
-    var D = DATA[dom];
+    var D = DATA[dom], V = view(dom), act = yrActive();
     var items = [
-      ['Unidades', D.nu.toLocaleString('es'), D.noun + 's analizadas'],
-      ['Temas', D.nt, 'espacio propio de este universo'],
+      ['Unidades', V.nu.toLocaleString('es'),
+       act ? 'de ' + D.nu.toLocaleString('es') + ' · años ' + yrText() : plural(D.noun) + ' analizadas'],
+      ['Temas', V.nt, act ? 'con presencia en el rango' : 'espacio propio de este universo'],
     ];
     var dl = document.getElementById('metrics'); dl.textContent='';
     items.forEach(function(it){
@@ -553,26 +711,28 @@ footer p{margin:0 0 6px;max-width:78ch}
   }
 
   function renderList(){
-    var D = DATA[dom], I = build(dom), list = document.getElementById('list');
+    var D = DATA[dom], V = view(dom), list = document.getElementById('list');
     list.textContent='';
+    function byEq(a, b){ return V.eq[b] - V.eq[a]; }
+    function present(id){ return V.n[id] > 0; }
     var q = query.trim().toLowerCase();
     var rows;
     if (mode === 'unit' || (q && q.length >= 2)) {
       // con busqueda se mezclan temas y unidades, priorizando temas
       var t = Object.keys(D.topics).filter(function(id){
-        return !q || D.topics[id].l.toLowerCase().indexOf(q) >= 0; })
-        .sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })
+        return present(id) && (!q || D.topics[id].l.toLowerCase().indexOf(q) >= 0); })
+        .sort(byEq)
         .map(function(id){ return {kind:'t', id:id}; });
       var u = !q ? [] : Object.keys(D.units).filter(function(id){
-        return D.units[id].t.toLowerCase().indexOf(q) >= 0; })
+        return inYears(dom, id) && D.units[id].t.toLowerCase().indexOf(q) >= 0; })
         .slice(0,120).map(function(id){ return {kind:'u', id:id}; });
       rows = t.concat(u);
     } else {
-      rows = Object.keys(D.topics).sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })
+      rows = Object.keys(D.topics).filter(present).sort(byEq)
         .map(function(id){ return {kind:'t', id:id}; });
     }
     var maxEq = 1;
-    Object.keys(D.topics).forEach(function(id){ maxEq = Math.max(maxEq, D.topics[id].eq); });
+    Object.keys(D.topics).forEach(function(id){ maxEq = Math.max(maxEq, V.eq[id]); });
 
     document.getElementById('listCount').textContent =
       rows.length + (q ? ' resultados' : ' temas');
@@ -585,9 +745,9 @@ footer p{margin:0 0 6px;max-width:78ch}
         b.appendChild(el('span','name', t.l));
         var m = el('div','meta');
         var tr = el('div','track'); tr.style.setProperty('--bar','var(--contain)');
-        var i = el('i'); i.style.width = Math.max(2,(t.eq/maxEq*100)) + '%'; tr.appendChild(i);
+        var i = el('i'); i.style.width = Math.max(2,(V.eq[r.id]/maxEq*100)) + '%'; tr.appendChild(i);
         m.appendChild(tr);
-        m.appendChild(el('span','val', t.eq.toFixed(1) + ' eq · ' + t.n + ' ' + D.noun.slice(0,3) + '.'));
+        m.appendChild(el('span','val', V.eq[r.id].toFixed(1) + ' eq · ' + V.n[r.id] + ' ' + D.noun.slice(0,3) + '.'));
         b.appendChild(m);
       } else {
         var u = D.units[r.id];
@@ -614,7 +774,7 @@ footer p{margin:0 0 6px;max-width:78ch}
   }
 
   function renderDetail(){
-    var D = DATA[dom], I = build(dom), box = document.getElementById('detail');
+    var D = DATA[dom], I = build(dom), V = view(dom), box = document.getElementById('detail');
     box.textContent = '';
     if (!sel){
       box.appendChild(el('h3',null,'Elige un tema'));
@@ -624,12 +784,13 @@ footer p{margin:0 0 6px;max-width:78ch}
       return;
     }
     if (sel.kind === 't'){
-      var t = D.topics[sel.id], rows = (I.byTopic[sel.id]||[]).slice(0, 40);
+      var t = D.topics[sel.id], all = V.byTopic[sel.id] || [], rows = all.slice(0, 40);
+      yrBanner(box, dom, V.nu, D.nu);
       box.appendChild(el('h3', null, t.l));
       if (t.d) box.appendChild(el('p','desc', t.d));
       var chips = el('div','chips');
-      [['Del corpus', pct(t.sh)],
-       [D.noun.charAt(0).toUpperCase()+D.noun.slice(1)+'s que lo tocan', t.n],
+      [['Del corpus', pct(yrActive() ? (V.nu ? V.eq[sel.id] / V.nu : 0) : t.sh)],
+       [cap(plural(D.noun)) + ' que lo tocan', V.n[sel.id]],
        ['Temas extraídos que lo componen', t.v]
       ].forEach(function(c){
         var s = el('span','chip'); s.appendChild(document.createTextNode(c[0]+' '));
@@ -660,9 +821,11 @@ footer p{margin:0 0 6px;max-width:78ch}
         tb.appendChild(tr);
       });
       tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
-      if ((I.byTopic[sel.id]||[]).length > 40)
+      if (!all.length)
+        box.appendChild(el('p','note',ningun(D.noun) + ' de este tema cae en los años elegidos.'));
+      if (all.length > 40)
         box.appendChild(el('p','note','Se muestran las 40 unidades que más aportan, de ' +
-          (I.byTopic[sel.id].length) + '.'));
+          all.length + '.'));
       box.appendChild(el('p','note','Las dos columnas responden preguntas distintas y rara vez coinciden: ' +
         'la unidad que más aporta al tema no es siempre la que más se dedica a él.'));
     } else {
@@ -798,12 +961,12 @@ footer p{margin:0 0 6px;max-width:78ch}
       return;
     }
     if (avail.indexOf(ceplanDom) < 0) ceplanDom = avail[0];
-    var D = DATA[ceplanDom], C = D.ceplan;
+    var D = DATA[ceplanDom], C = D.ceplan, CV = cview(ceplanDom);
+    var subsArr = Object.keys(C.subs);
+    yrBanner(box, ceplanDom, CV.nu, Object.keys(C.status).length);
     box.appendChild(el('p', 'desc', 'Qué sub-temáticas de la hoja «Líneas de Inv.» del PEDN 2050 ' +
       '(4 Objetivos Nacionales, 126 sub-temáticas) desarrolla cada ' + D.noun + ', y quién desarrolla ' +
-      'cada sub-temática. Los embeddings proponen candidatas (similitud ≥ ' + C.floor + ', en ambas ' +
-      'direcciones) y un modelo de lenguaje (' + C.model + ') confirma cada una como relación clara, ' +
-      'tangencial o ninguna. La cobertura cuenta solo relaciones claras.'));
+      'cada sub-temática.'));
 
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
     avail.forEach(function(d){
@@ -814,68 +977,40 @@ footer p{margin:0 0 6px;max-width:78ch}
     });
     box.appendChild(seg);
 
-    var nUnits = Object.keys(C.status).length, sc = C.sc;
-    var subsArr = Object.keys(C.subs).map(function(k){ return k; });
-    var nCov = {desarrollada: 0, debil: 0, sin_desarrollo: 0};
-    subsArr.forEach(function(k){ nCov[C.subs[k].cov]++; });
-    var chips = el('div', 'chips');
-    [[D.noun.charAt(0).toUpperCase() + D.noun.slice(1) + 's con alguna sub-temática',
-      sc.alineada + ' de ' + nUnits + ' (' + Math.round(100 * sc.alineada / nUnits) + ' %)'],
-     ['Relaciones claras', C.links['2']], ['Tangenciales', C.links['1']],
-     ['Sub-temáticas desarrolladas', nCov.desarrollada], ['Débiles', nCov.debil],
-     ['Sin desarrollo', nCov.sin_desarrollo]
-    ].forEach(function(c){
-      var s = el('span', 'chip'); s.appendChild(document.createTextNode(c[0] + ' '));
-      s.appendChild(el('b', null, String(c[1]))); chips.appendChild(s);
-    });
-    box.appendChild(chips);
-    box.appendChild(el('div', 'warn')).appendChild(el('p', null,
-      'La precisión de estos vínculos todavía se está validando contra una muestra calificada a mano. ' +
-      'Las relaciones tangenciales son las menos confiables; por eso no cuentan para la cobertura.'));
-
     // reparto por ON
-    var onKeys = Object.keys(C.byOn).sort(function(a, b){ return C.byOn[b] - C.byOn[a]; });
-    var total = onKeys.reduce(function(s, k){ return s + C.byOn[k]; }, 0) || 1;
+    var onKeys = Object.keys(CV.byOn).sort(function(a, b){ return CV.byOn[b] - CV.byOn[a]; });
+    var total = onKeys.reduce(function(s, k){ return s + CV.byOn[k]; }, 0) || 1;
     var wrap = el('div', 'tablewrap'), tbl = el('table');
     tbl.innerHTML = '<thead><tr><th>Objetivo Nacional</th>' +
-      '<th class="c">' + D.noun.charAt(0).toUpperCase() + D.noun.slice(1) + 's-equivalentes' +
+      '<th class="c">' + cap(plural(D.noun)) + '-equivalentes' +
       '<span class="hint">cada unidad reparte 1 entre sus sub-temáticas</span></th>' +
       '<th class="c">% de lo alineado</th></tr></thead>';
     var tb = el('tbody');
     onKeys.forEach(function(k){
       var tr = el('tr');
       tr.appendChild(el('td', null, C.on[k]));
-      var t1 = el('td', 'num'); t1.textContent = C.byOn[k].toFixed(1); tr.appendChild(t1);
-      tr.appendChild(barCell('c', C.byOn[k] / total, 1));
+      var t1 = el('td', 'num'); t1.textContent = CV.byOn[k].toFixed(1); tr.appendChild(t1);
+      tr.appendChild(barCell('c', CV.byOn[k] / total, 1));
       tb.appendChild(tr);
     });
     tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
 
-    var f = el('div', 'filters');
-    var lab = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.id = 'ceplan-gaps';
-    cb.checked = ceplanOnlyGaps;
-    cb.addEventListener('change', function(){ ceplanOnlyGaps = cb.checked; renderCeplan(); });
-    lab.appendChild(cb); lab.appendChild(document.createTextNode('Mostrar solo sub-temáticas débiles o sin desarrollo'));
-    f.appendChild(lab);
-    f.style.marginTop = '22px';
-    box.appendChild(f);
-
     // ON -> Tematica -> Sub-tematica
     Object.keys(C.on).sort().forEach(function(on){
       var ids = subsArr.filter(function(k){
-        return C.subs[k].o === on && (!ceplanOnlyGaps || C.subs[k].cov !== 'desarrollada');
+        return C.subs[k].o === on && (!ceplanOnlyGaps || CV.subs[k].cov !== 'desarrollada');
       });
       if (!ids.length) return;
       var blk = el('div', 'on-block');
       blk.appendChild(el('h4', null, C.on[on]));
-      var dev = ids.filter(function(k){ return C.subs[k].cov === 'desarrollada'; }).length;
+      var dev = ids.filter(function(k){ return CV.subs[k].cov === 'desarrollada'; }).length;
       blk.appendChild(el('p', 'on-sum', ids.length + ' sub-temáticas' +
         (ceplanOnlyGaps ? ' con poco o ningún desarrollo' : ' · ' + dev + ' desarrolladas')));
       var temas = {};
       ids.forEach(function(k){ (temas[C.subs[k].t] = temas[C.subs[k].t] || []).push(k); });
       Object.keys(temas).sort().forEach(function(t){
         blk.appendChild(el('div', 'tema-h', t));
-        temas[t].sort(function(a, b){ return C.subs[b].eq - C.subs[a].eq; }).forEach(function(k){
+        temas[t].sort(function(a, b){ return CV.subs[b].eq - CV.subs[a].eq; }).forEach(function(k){
           blk.appendChild(subRow(ceplanDom, k));
         });
       });
@@ -884,14 +1019,14 @@ footer p{margin:0 0 6px;max-width:78ch}
   }
 
   function subRow(d, sid){
-    var D = DATA[d], C = D.ceplan, s = C.subs[sid];
+    var D = DATA[d], C = D.ceplan, s = C.subs[sid], sv = cview(d).subs[sid];
     var det = el('details', 'subrow'); det.id = 'sub-' + sid;
     if (ceplanOpen === sid) det.open = true;
     var sm = el('summary');
     sm.appendChild(el('span', 'nm', s.l));
-    var cov = COV[s.cov];
+    var cov = COV[sv.cov];
     sm.appendChild(el('span', 'pill ' + cov[0], cov[1]));
-    sm.appendChild(el('span', 'ct', s.n2 + ' claras · ' + (s.n - s.n2) + ' tang. · ' + s.eq.toFixed(1) + ' eq'));
+    sm.appendChild(el('span', 'ct', sv.n2 + ' claras · ' + (sv.n - sv.n2) + ' tang. · ' + sv.eq.toFixed(1) + ' eq'));
     det.appendChild(sm);
     var filled = false;
     det.addEventListener('toggle', function(){
@@ -901,11 +1036,17 @@ footer p{margin:0 0 6px;max-width:78ch}
       var inner = el('div', 'inner');
       var rows = [];
       Object.keys(C.units).forEach(function(u){
+        if (!inYears(d, u)) return;
         C.units[u].forEach(function(r){ if (r[0] === sid) rows.push({u: u, g: r[1], c: r[2], k: r[3]}); });
       });
+      if (yrActive()){
+        var tot = rows.reduce(function(a, r){ return a + r.c; }, 0);
+        rows.forEach(function(r){ r.k = tot ? r.c / tot : 0; });
+      }
       rows.sort(function(a, b){ return (b.g - a.g) || (b.k - a.k); });
       if (!rows.length){
-        inner.appendChild(el('p', 'note', 'Ninguna ' + D.noun + ' tiene una relación confirmada con esta sub-temática.'));
+        inner.appendChild(el('p', 'note', ningun(D.noun) + ' tiene una relación confirmada con esta sub-temática' +
+          (yrActive() ? ' en los años elegidos.' : '.')));
         det.appendChild(inner); return;
       }
       var maxK = rows.reduce(function(m, r){ return Math.max(m, r.k); }, 0.0001);
@@ -959,6 +1100,284 @@ footer p{margin:0 0 6px;max-width:78ch}
   });
   document.getElementById('q').addEventListener('input', function(e){
     query = e.target.value; renderList();
+  });
+
+  function gotoTopic(d, tid){
+    dom = d; sel = {kind: 't', id: tid}; query = '';
+    document.getElementById('q').value = '';
+    showSection(d);
+    renderMetrics(); renderList(); renderDetail();
+    document.getElementById('detail').scrollIntoView({block: 'start'});
+  }
+  function gotoListSearch(d, text){
+    dom = d; sel = null; query = text;
+    document.getElementById('q').value = text;
+    showSection(d);
+    renderMetrics(); renderList(); renderDetail();
+    document.getElementById('explorer').scrollIntoView({block: 'start'});
+  }
+
+  // Vuelve a pintar lo que este a la vista cuando cambia el rango de años.
+  function rerender(){
+    if (!document.getElementById('explorer').hidden){ renderMetrics(); renderList(); renderDetail(); }
+    if (!document.getElementById('ceplan').hidden) renderCeplan();
+    if (!omniRes.hidden) omniRender();
+    var parts = [];
+    if (yrActive()) Object.keys(DATA).forEach(function(d){
+      parts.push(view(d).nu.toLocaleString('es') + ' de ' + DATA[d].nu.toLocaleString('es') + ' ' +
+        plural(DATA[d].noun));
+    });
+    document.getElementById('yr-note').textContent = parts.join(' · ');
+    document.getElementById('yr-reset').hidden = !yrActive();
+  }
+
+  // --- deslizador de años ---------------------------------------------------
+  var yrLo = document.getElementById('yr-lo'), yrHi = document.getElementById('yr-hi');
+  var yrNo = document.getElementById('yr-nodate');
+  [yrLo, yrHi].forEach(function(r){ r.min = YR.min; r.max = YR.max; r.step = 1; });
+  function yrPaint(){
+    yrLo.value = YR.lo; yrHi.value = YR.hi; yrNo.checked = YR.nodate;
+    var span = (YR.max - YR.min) || 1;
+    var f = document.getElementById('yr-fill');
+    f.style.left = ((YR.lo - YR.min) / span * 100) + '%';
+    f.style.width = ((YR.hi - YR.lo) / span * 100) + '%';
+    // Con los dos pulgares juntos al extremo derecho, el de "desde" debe quedar
+    // encima o no se podria volver a mover.
+    yrLo.style.zIndex = YR.lo >= YR.max - (span * 0.1) ? 3 : 1;
+    document.getElementById('yr-out').textContent = yrText();
+    yrLo.setAttribute('aria-valuetext', 'desde ' + YR.lo);
+    yrHi.setAttribute('aria-valuetext', 'hasta ' + YR.hi);
+  }
+  function yrSet(lo, hi, nodate){
+    lo = Math.max(YR.min, Math.min(YR.max, lo)); hi = Math.max(YR.min, Math.min(YR.max, hi));
+    if (lo > hi){ var x = lo; lo = hi; hi = x; }
+    var changed = lo !== YR.lo || hi !== YR.hi || nodate !== YR.nodate;
+    YR.lo = lo; YR.hi = hi; YR.nodate = nodate;
+    yrPaint();
+    if (changed) rerender();
+  }
+  yrLo.addEventListener('input', function(){ yrSet(Math.min(+yrLo.value, YR.hi), YR.hi, YR.nodate); });
+  yrHi.addEventListener('input', function(){ yrSet(YR.lo, Math.max(+yrHi.value, YR.lo), YR.nodate); });
+  yrNo.addEventListener('change', function(){ yrSet(YR.lo, YR.hi, yrNo.checked); });
+  document.getElementById('yr-reset').addEventListener('click', function(){
+    omniYrSaved = null; yrSet(YR.min, YR.max, true); });
+  yrPaint();
+
+  // --- buscador global ------------------------------------------------------
+  // Un solo indice con todo lo que se puede abrir: unidades de cada universo,
+  // temas de cada universo y sub-tematicas del PEDN. Sin acentos ni mayusculas,
+  // y todas las palabras deben aparecer (en cualquier orden).
+  function fold(s){ return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  // Pliega caracter a caracter para que las posiciones coincidan con el texto
+  // original y se pueda resaltar sobre el.
+  function foldAligned(s){
+    var out = '';
+    for (var i = 0; i < s.length; i++){ var f = fold(s[i]); out += f.length === 1 ? f : s[i]; }
+    return out;
+  }
+  var OMNI = [], GROUPS = [];
+  (function(){
+    Object.keys(DATA).forEach(function(d){
+      var D = DATA[d], g = 'u:' + d;
+      GROUPS.push({key: g, label: cap(plural(D.noun)) + (d === 'projects' ? '' : ' de proyectos'), d: d, kind: 'u'});
+      Object.keys(D.units).forEach(function(id){
+        var u = D.units[id];
+        OMNI.push({g: g, kind: 'u', d: d, id: id, title: u.t || id, ft: foldAligned(u.t || id),
+                   meta: [u.y, u.g].filter(Boolean).join(' · '), extra: fold(u.g + ' ' + id)});
+      });
+    });
+    GROUPS.push({key: 't', label: 'Temas', kind: 't'});
+    Object.keys(DATA).forEach(function(d){
+      var D = DATA[d];
+      Object.keys(D.topics).forEach(function(id){
+        var t = D.topics[id];
+        OMNI.push({g: 't', kind: 't', d: d, id: id, title: t.l, ft: foldAligned(t.l),
+                   meta: (NAMES[d] || d), extra: fold(t.d)});
+      });
+    });
+    GROUPS.push({key: 's', label: 'Sub-temáticas CEPLAN', kind: 's'});
+    var seen = {};
+    Object.keys(DATA).forEach(function(d){
+      var C = DATA[d].ceplan; if (!C) return;
+      Object.keys(C.subs).forEach(function(id){
+        if (seen[id]) return; seen[id] = 1;
+        var s = C.subs[id];
+        OMNI.push({g: 's', kind: 's', d: d, id: id, title: s.l, ft: foldAligned(s.l),
+                   meta: (C.on[s.o] || s.o) + ' · ' + s.t, extra: fold(s.t + ' ' + (C.on[s.o] || '') + ' ' + s.o)});
+      });
+    });
+  })();
+
+  // Prefijos para acotar: "p:" proyectos, "pub:" publicaciones, "t:" temas,
+  // "s:"/"ceplan:" sub-tematicas. Un año (2015) o rango (2012-2016) en la
+  // consulta mueve el deslizador mientras siga escrito.
+  var PREFIX = {'p': 'u:projects', 'proy': 'u:projects', 'proyecto': 'u:projects', 'proyectos': 'u:projects',
+    'pub': 'u:publications_linked', 'publicacion': 'u:publications_linked', 'publicaciones': 'u:publications_linked',
+    't': 't', 'tema': 't', 'temas': 't',
+    's': 's', 'sub': 's', 'ceplan': 's', 'pedn': 's', 'on': 's'};
+  function parseQuery(raw){
+    var q = {only: null, years: null, tokens: []};
+    fold(raw).split(/\s+/).filter(Boolean).forEach(function(tok){
+      var m = /^([a-z]+):(.*)$/.exec(tok);
+      if (m && PREFIX[m[1]]){ q.only = PREFIX[m[1]]; tok = m[2]; if (!tok) return; }
+      var y = /^((?:19|20)\d\d)(?:(?:-|–|\.\.)((?:19|20)\d\d))?$/.exec(tok);
+      if (y){ q.years = [+y[1], y[2] ? +y[2] : +y[1]]; return; }
+      q.tokens.push(tok);
+    });
+    return q;
+  }
+  function scoreEntry(e, toks, phrase){
+    var s = 0;
+    for (var i = 0; i < toks.length; i++){
+      var t = toks[i], at = e.ft.toLowerCase().indexOf(t);
+      if (at >= 0){
+        var wordStart = at === 0 || /[^a-z0-9]/.test(e.ft.toLowerCase().charAt(at - 1));
+        s += wordStart ? 3 : 2;
+      } else if (e.extra.indexOf(t) >= 0 || (e.kind === 'u' && e.id === t)) s += 1;
+      else return 0;
+    }
+    var ft = e.ft.toLowerCase();
+    if (ft.indexOf(phrase) === 0) s += 5; else if (ft.indexOf(phrase) >= 0) s += 2;
+    if (e.kind === 'u' && e.id.toLowerCase() === phrase) s += 10;
+    return s;
+  }
+  function highlight(e, toks){
+    var ft = e.ft.toLowerCase(), marks = new Array(e.title.length + 1).join('0').split('');
+    toks.forEach(function(t){
+      var from = 0, at;
+      while (t && (at = ft.indexOf(t, from)) >= 0){
+        for (var i = at; i < at + t.length; i++) marks[i] = '1';
+        from = at + t.length;
+      }
+    });
+    var h = '', open = false;
+    for (var i = 0; i < e.title.length; i++){
+      if (marks[i] === '1' && !open){ h += '<mark>'; open = true; }
+      if (marks[i] !== '1' && open){ h += '</mark>'; open = false; }
+      h += esc(e.title[i]);
+    }
+    return h + (open ? '</mark>' : '');
+  }
+
+  var omniq = document.getElementById('omniq'), omniRes = document.getElementById('omni-res');
+  var omniItems = [], omniActive = -1, omniYrSaved = null;
+  var PER_GROUP = 6;
+
+  function omniApplyYears(q){
+    if (q.years){
+      if (!omniYrSaved) omniYrSaved = {lo: YR.lo, hi: YR.hi, nodate: YR.nodate};
+      yrSet(q.years[0], q.years[1], false);
+    } else if (omniYrSaved){
+      var s = omniYrSaved; omniYrSaved = null;
+      yrSet(s.lo, s.hi, s.nodate);
+    }
+  }
+
+  function omniRender(){
+    var raw = omniq.value, q = parseQuery(raw);
+    omniRes.textContent = ''; omniItems = []; omniActive = -1;
+    if (!q.tokens.length){
+      var help = el('div', 'omni-help');
+      help.innerHTML = 'Escribe palabras del título, el departamento, la revista o el tema; sin importar tildes ni orden. ' +
+        'Acota con <code>p:</code> proyectos, <code>pub:</code> publicaciones, <code>t:</code> temas o ' +
+        '<code>s:</code> sub-temáticas CEPLAN. Un año (<code>2015</code>) o rango (<code>2012-2016</code>) ' +
+        'mueve el filtro de años.';
+      omniRes.appendChild(help);
+      omniOpen(true);
+      return;
+    }
+    var phrase = q.tokens.join(' '), hits = {};
+    OMNI.forEach(function(e){
+      if (q.only && e.g !== q.only) return;
+      if (e.kind === 'u' && !inYears(e.d, e.id)) return;
+      if (e.kind === 't' && !view(e.d).n[e.id]) return;
+      var sc = scoreEntry(e, q.tokens, phrase);
+      if (sc) (hits[e.g] = hits[e.g] || []).push({e: e, s: sc});
+    });
+    var any = false;
+    GROUPS.forEach(function(G){
+      var list = hits[G.key]; if (!list) return;
+      any = true;
+      list.sort(function(a, b){ return b.s - a.s || a.e.title.length - b.e.title.length; });
+      var limit = q.only ? 40 : PER_GROUP;
+      var head = el('div', 'omni-grp');
+      head.appendChild(el('span', null, G.label));
+      head.appendChild(el('span', 'num', list.length > limit ? limit + ' de ' + list.length : String(list.length)));
+      omniRes.appendChild(head);
+      list.slice(0, limit).forEach(function(h){ omniAdd(h.e, q.tokens); });
+      if (list.length > limit && G.kind === 'u'){
+        omniAddMore('Ver los ' + list.length + ' en el explorador →', function(){ gotoListSearch(G.d, phrase); });
+      } else if (list.length > limit){
+        omniAddMore('Ver todos (' + list.length + ') →', function(){
+          var pre = G.kind === 't' ? 't:' : 's:';
+          omniq.value = pre + raw.replace(/^\s*[a-z]+:/i, ''); omniRender(); omniq.focus();
+        });
+      }
+    });
+    if (!any){
+      omniRes.appendChild(el('div', 'omni-empty', 'Nada coincide con «' + raw.trim() + '»' +
+        (yrActive() ? ' en los años ' + yrText() + '.' : '.')));
+    }
+    omniOpen(true);
+    if (omniItems.length) omniMove(0);
+  }
+  function omniAdd(e, toks){
+    var it = el('div', 'omni-item'); it.setAttribute('role', 'option');
+    it.id = 'omni-' + omniItems.length;
+    var t = el('span', 'ot'); t.innerHTML = highlight(e, toks); it.appendChild(t);
+    if (e.meta) it.appendChild(el('span', 'om', e.meta));
+    var go = function(){
+      omniClose();
+      if (e.kind === 'u') gotoUnit(e.d, e.id);
+      else if (e.kind === 't') gotoTopic(e.d, e.id);
+      else gotoSub(DATA[dom] && DATA[dom].ceplan ? dom : e.d, e.id);
+    };
+    omniBind(it, go);
+  }
+  function omniAddMore(label, go){
+    var it = el('div', 'omni-item'); it.setAttribute('role', 'option');
+    it.id = 'omni-' + omniItems.length;
+    it.appendChild(el('span', 'om', label));
+    omniBind(it, function(){ omniClose(); go(); });
+  }
+  function omniBind(it, go){
+    var i = omniItems.length;
+    it.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+    it.addEventListener('click', go);
+    it.addEventListener('mousemove', function(){ if (omniActive !== i) omniMove(i); });
+    omniItems.push({node: it, go: go});
+    omniRes.appendChild(it);
+  }
+  function omniMove(i){
+    if (!omniItems.length) return;
+    i = (i + omniItems.length) % omniItems.length;
+    if (omniActive >= 0 && omniItems[omniActive]) omniItems[omniActive].node.setAttribute('aria-selected', 'false');
+    omniActive = i;
+    var n = omniItems[i].node;
+    n.setAttribute('aria-selected', 'true');
+    omniq.setAttribute('aria-activedescendant', n.id);
+    n.scrollIntoView({block: 'nearest'});
+  }
+  function omniOpen(v){ omniRes.hidden = !v; omniq.setAttribute('aria-expanded', String(v)); }
+  function omniClose(){ omniOpen(false); omniq.removeAttribute('aria-activedescendant'); }
+
+  omniq.addEventListener('input', function(){ omniApplyYears(parseQuery(omniq.value)); omniRender(); });
+  omniq.addEventListener('focus', function(){ omniRender(); });
+  omniq.addEventListener('blur', function(){ omniClose(); });
+  omniq.addEventListener('keydown', function(ev){
+    if (ev.key === 'ArrowDown'){ ev.preventDefault(); if (omniRes.hidden) omniRender(); else omniMove(omniActive + 1); }
+    else if (ev.key === 'ArrowUp'){ ev.preventDefault(); omniMove(omniActive - 1); }
+    else if (ev.key === 'Enter'){ if (omniActive >= 0 && omniItems[omniActive]){ ev.preventDefault(); omniItems[omniActive].go(); } }
+    else if (ev.key === 'Escape'){
+      if (!omniRes.hidden) omniClose();
+      else { omniq.value = ''; omniApplyYears(parseQuery('')); }
+    }
+  });
+  document.addEventListener('keydown', function(ev){
+    var tag = (ev.target.tagName || '').toLowerCase();
+    if (ev.key === '/' && tag !== 'input' && tag !== 'textarea' && !ev.target.isContentEditable){
+      ev.preventDefault(); omniq.focus(); omniq.select();
+    }
   });
 
   // Estado inicial: el tema mas grande ya abierto, para que la pagina se lea de entrada.

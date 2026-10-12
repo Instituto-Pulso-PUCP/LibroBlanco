@@ -16,6 +16,7 @@ Salida: salidas/topics/atlas.html
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -185,6 +186,32 @@ def ceplan_block(domain: str, run_id: str) -> dict | None:
             "minG2": pr["developed_min_grade2"]}
 
 
+GROUND_TRUTH_CSV = ROOT / "salidas" / "07_project_publication_ground_truth.csv"
+
+
+def publication_years() -> dict[str, int]:
+    """Año de cada publicacion, para el filtro de años de la pagina.
+
+    El CSV de publications_linked no trae año (y la tabla `units` lo deja en
+    NULL), asi que se completa aparte: primero el catalogo maestro por
+    publication_id; para los ids `gt_<proyecto>_<cod_prod>` (resultados que no
+    cruzaron al maestro) el año declarado en PULSO y, si falta, el de OpenAlex."""
+    years = {}
+    for r in lb_domains.read_source(lb_domains.get("publications")):
+        y = lb_domains.clean_year(r.get("year"))
+        if y:
+            years[str(r["publication_id"])] = y
+    if GROUND_TRUTH_CSV.exists():
+        with GROUND_TRUTH_CSV.open(encoding="utf-8-sig", newline="") as fh:
+            for r in csv.DictReader(fh):
+                key = f"gt_{r.get('project_id', '')}_{r.get('cod_prod', '')}"
+                y = (lb_domains.clean_year(r.get("result_year"))
+                     or lb_domains.clean_year(r.get("openalex_publication_year")))
+                if y and key not in years:
+                    years[key] = y
+    return years
+
+
 def collect(cfg, domain: str, run_id: str) -> dict:
     store = lb_store.open_store(cfg, domain, run_id)
     raw_topics = {t["topic_id"]: t for t in store.read_topics()}
@@ -204,6 +231,11 @@ def collect(cfg, domain: str, run_id: str) -> dict:
         units[u["unit_id"]] = {"t": (u.get("title") or "")[:170],
                                "g": (u.get("grouping") or "")[:60],
                                "y": u.get("year")}
+    if domain.startswith("publications"):
+        years = publication_years()
+        for uid, u in units.items():
+            if not u["y"]:
+                u["y"] = years.get(str(uid))
     for uid, m in unit_metrics.items():
         if uid in units:
             units[uid].update({"eff": round(m.get("effective_topics") or 0, 2),
@@ -271,39 +303,42 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
             "units": report["units_built"], "dropped": report["units_dropped"],
             "chars": report["text_chars"], "cols": cols, "req": spec.required_any,
             "raw_rows": len(raw_rows), "dropped_min_req": dropped_min_req,
-            "provenance": provenance_notes(domain)}
+            "provenance": provenance_notes(domain, len(raw_rows), len(rows), len(units))}
 
 
-def provenance_notes(domain: str) -> dict:
+def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int) -> dict:
     """El embudo completo hasta la poblacion final: de donde salen los datos
-    y por que se quedo tan poca. Numeros escritos a mano porque cada paso
-    viene de un archivo/decision distinta que no se puede derivar solo del
-    CSV de origen del dominio (ver conversacion del equipo)."""
+    y por que se quedo tan poca. El primer paso (total en PULSO) es un dato
+    externo escrito a mano; el resto sale de la corrida que se muestra, para que
+    no quede desactualizado cuando cambia el universo (p.ej. 2026-10-11:
+    646 -> 653 proyectos, 529 -> 462 publicaciones)."""
     if domain == "projects":
         return {
             "steps": [
                 {"n": 1928, "label": "Proyectos registrados en PULSO y CRIS",
                  "note": "hoja PROYECTOS del Excel de PULSO"},
-                {"n": 975, "label": "Cerrados y del 2010 en adelante",
+                {"n": n_source, "label": "Cerrados y del 2010 en adelante",
                  "note": "solo proyectos concluidos, en la ventana de años que usa el equipo"},
-                {"n": 646, "label": "Tienen título y resumen de CRIS",
+                {"n": n_units, "label": "Tienen título y resumen de CRIS",
                  "note": "un proyecto con solo título no alcanza para un análisis de texto "
                          "serio"},
             ],
             "why": "",
         }
     if domain == "publications_linked":
+        dup = n_qualified - n_units
         return {
             "steps": [
-                {"n": 1192, "label": "Publicaciones que un proyecto del universo declaró "
-                                     "como su resultado",
+                {"n": n_source, "label": "Publicaciones que un proyecto del universo declaró "
+                                         "como su resultado",
                  "note": "archivo publications_linked_full"},
-                {"n": 538, "label": "Tienen título y resumen",
+                {"n": n_qualified, "label": "Tienen título y resumen",
                  "note": "una publicación con solo título no alcanza para un análisis de "
-                         "texto serio"},
-                {"n": 529, "label": "Publicaciones distintas tras quitar duplicados",
-                 "note": "9 publicaciones estaban declaradas por más de un proyecto y se "
-                         "cuentan una sola vez"},
+                         "texto serio; los resúmenes buscados por título se verifican contra "
+                         "el título declarado"},
+                {"n": n_units, "label": "Publicaciones distintas tras quitar duplicados",
+                 "note": (f"{dup} publicaciones estaban declaradas por más de un proyecto y se "
+                          "cuentan una sola vez") if dup else "no había duplicados"},
             ],
             "why": "",
         }
