@@ -19,6 +19,27 @@ también califique (1 192 → 462). Detalle completo del embudo y por qué se
 decidió así: `docs/cuantificacion_temas.md` §7, o la pestaña **Datos de
 origen** del atlas.
 
+**Cambio 2026-10-13 — universo de proyectos desde CRIS (código listo, sin
+correr en el servidor).** Los proyectos ya no parten de la hoja PROYECTOS de
+PULSO («5. Cerrado», año ≥ 2010) sino de las filas de
+`datos/ProyectosPUCPCRIS-20261013.csv`: estado CRIS «concluido» e inicio ≥ 2010
+(año de CRIS; si falta, el de PULSO). PULSO sigue aportando `COD_AERI` y
+metadatos. Script: `scripts/addons/build_projects_from_cris.py` (conserva los
+`project_id` existentes; idempotente). Resultado: 1 686 proyectos, **1 189** con
+título y resumen (antes 653; los 653 siguen dentro). Entran 670 que PULSO tiene
+con otro estado (634 «en proceso de cierre» o «concluido», 27 «en ejecución», 5
+«cancelado», 2 «en proceso de cierre» escrito en minúscula, 1 «pendiente de
+reactivación», 1 «cerrado») y 54 que solo están en CRIS; salen 13 del maestro anterior, ninguno con resumen. Los vínculos
+declarados se reconstruyen para el universo nuevo desde `PROY_RESULTADOS`
+(`scripts/addons/build_declared_results.py`): 1 192 → **2 315** publicaciones
+declaradas de 668 proyectos; con el mínimo título + resumen, 693 publicaciones
+distintas en local (más en el servidor con los resúmenes externos). Solo dos
+tipos de vínculo: **declarado** (PROY_RESULTADOS) e **inferido** (todo lo
+demás, incluido un código de proyecto citado en la financiación de una
+publicación). `rerun_universos.sh` ya usa los dos scripts nuevos en el paso 1.
+Antes de relanzar: correr `recover_abstracts_external.py` para las ~1 100
+publicaciones declaradas nuevas (manual, horas) y revisar sus candidatos.
+
 **Cambio 2026-10-11 (re-corridas `*-20261011`)**: (1) el merge CRIS aplica los
 overrides manuales → 646 a 653 proyectos; (2) la cascada de publicaciones
 descarta los abstracts de OpenAlex emparejados por título que eran de otra obra

@@ -74,7 +74,7 @@ class Domain:
 DOMAINS: dict[str, Domain] = {
     "projects": Domain(
         key="projects",
-        label="Proyectos de investigacion PUCP cerrados (2010+)",
+        label="Proyectos de investigacion PUCP concluidos (2010+, segun CRIS)",
         source_csv=REPO_ROOT / "salidas" / "01_projects_closed_con_cris.csv",
         id_column="project_id",
         title_column="title",
@@ -215,7 +215,8 @@ def read_source(domain: Domain) -> list[dict]:
 
 def qualifying_project_ids(rows: list[dict] | None = None) -> set[str]:
     """Universo minimo declarado de PROYECTOS (decision del equipo, no del
-    CSV): closed/2010+ ya viene aplicado en el CSV de origen; a eso se suma
+    CSV): concluido en CRIS + inicio 2010+ ya viene aplicado en el CSV de origen
+    (scripts/addons/build_projects_from_cris.py, desde 2026-10-13); a eso se suma
     title + cris_abstract.
 
     Antes exigia ademas knowledge_area + linea de investigacion (dejaba 409).

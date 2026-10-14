@@ -219,7 +219,20 @@ Decisión del equipo, separada de `required_any` (que solo evita unidades sin
 texto en absoluto): una unidad puede tener texto suficiente para construirse y
 aun así no ser parte del universo si no cumple un mínimo de calidad de dato.
 
-- **Proyectos**: cerrado (`Estado = "5. Cerrado"`) y `year ≥ 2010` (ya
+- **Proyectos (desde 2026-10-13)**: el universo lo definen las filas del export
+  de Proyectos CRIS, no la hoja PROYECTOS de PULSO: estado CRIS «concluido» e
+  inicio ≥ 2010 (año de inicio de CRIS; si falta, el de PULSO; si tampoco, el
+  de fin de CRIS), y `title` + `cris_abstract`. Con el export del 2026-10-13:
+  1 891 filas CRIS → 1 686 concluidas desde 2010 → **1 189** con título y
+  resumen (`scripts/addons/build_projects_from_cris.py`). Motivo: PULSO tarda
+  en marcar los proyectos como «5. Cerrado»; 670 que CRIS ya da por
+  concluidos figuraban en PULSO con otro estado (sobre todo «en proceso de
+  cierre» y «concluido»; 27 «en ejecución» y 5 «cancelado», para los que se
+  confía en CRIS), y 54 solo existen en CRIS. Los vínculos declarados se
+  reconstruyen para este universo desde `PROY_RESULTADOS`
+  (`scripts/addons/build_declared_results.py`). El criterio anterior se
+  describe a continuación.
+- **Proyectos (hasta 2026-10-13)**: cerrado (`Estado = "5. Cerrado"`) y `year ≥ 2010` (ya
   aplicado en `salidas/01_projects_closed_con_cris.csv`), **y** `title`, **y**
   `cris_abstract`. De 1 928 proyectos registrados en PULSO, 975 quedan
   cerrados/2010+, y de esos, **653** cumplen las dos (646 hasta el

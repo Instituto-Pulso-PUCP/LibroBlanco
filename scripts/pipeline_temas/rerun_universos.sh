@@ -14,7 +14,8 @@
 #   OLD_PUBS=publications_linked-529 corrida de publications_linked de donde se reusa
 #   TAG=$(date +%Y%m%d)              sufijo de las corridas nuevas
 #
-# Pasos: 1 merge CRIS -> 2 rebuild publicaciones ligadas -> 3 por dominio:
+# Pasos: 1 maestro de proyectos desde CRIS + resultados declarados de PULSO ->
+# 2 rebuild publicaciones ligadas -> 3 por dominio:
 # etapa 01, seed por texto identico, etapas 02-05 -> 4 cruce CEPLAN ->
 # 5 atlas (salidas/topics/atlas.html; publicarlo es aparte).
 # Al terminar escribe salidas/topics/rerun_universos.DONE (o .FAILED).
@@ -38,12 +39,17 @@ step() { echo; echo "=== $(date '+%F %T') · $*"; }
 step "inicio: $OLD_PROJ -> $NEW_PROJ · $OLD_PUBS -> $NEW_PUBS"
 BK="salidas/backup_${TAG}"
 mkdir -p "$BK"
-for f in salidas/01_projects_closed_con_cris.csv salidas/07_publications_linked_full.csv; do
+for f in salidas/01_projects_closed_con_cris.csv salidas/06_project_results_ground_truth.csv \
+         salidas/07_project_publication_ground_truth.csv salidas/07_publications_linked_full.csv; do
   [ -f "$BK/$(basename "$f")" ] || cp "$f" "$BK/"
 done
 
-step "1/5 merge CRIS"
-python3 scripts/addons/merge_cris_stdlib.py
+# Desde 2026-10-13 el universo de proyectos lo definen las filas de Proyectos CRIS
+# (concluido, inicio >= 2010); PULSO aporta COD_AERI y metadatos. Reemplaza a
+# merge_cris_stdlib.py, que partia de los "5. Cerrado" de PULSO.
+step "1/5 proyectos desde CRIS y resultados declarados"
+python3 scripts/addons/build_projects_from_cris.py
+python3 scripts/addons/build_declared_results.py
 
 step "2/5 rebuild publicaciones ligadas"
 python3 scripts/addons/rebuild_linked_publications.py

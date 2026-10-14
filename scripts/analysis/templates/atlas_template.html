@@ -8,6 +8,7 @@
   --contain:#0d6b6b;  --contain-soft:#0d6b6b26;   /* cuanto de la unidad es el tema */
   --contrib:#a9630c;  --contrib-soft:#a9630c26;   /* cuanto del tema aporta la unidad */
   --focus:#0d6b6b;
+  color-scheme:light;
 }
 /* Forma plana, no anidada: el anidamiento CSS falla en silencio en motores
    antiguos y ahi el modo oscuro se quedaria sin definir. */
@@ -18,6 +19,7 @@
     --contain:#4bbdb3; --contain-soft:#4bbdb333;
     --contrib:#e0a355; --contrib-soft:#e0a35533;
     --focus:#4bbdb3;
+    color-scheme:dark;   /* controles nativos (casilla, borrar busqueda) en oscuro */
   }
 }
 :root[data-theme="dark"]{
@@ -26,8 +28,13 @@
   --contain:#4bbdb3; --contain-soft:#4bbdb333;
   --contrib:#e0a355; --contrib-soft:#e0a35533;
   --focus:#4bbdb3;
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
+/* Las pestanas ocultan secciones con el atributo hidden, pero .explorer,
+   .metrics y .legend declaran display:grid y le ganarian. Publicado como
+   artifact lo cubre el CSS del anfitrion; abierto como archivo, no. */
+[hidden]{display:none!important}
 body{background:var(--ground);color:var(--ink);
   font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
   font-size:15px;line-height:1.5;margin:0}
@@ -243,6 +250,7 @@ details.subrow .inner .tablewrap{background:var(--surface)}
 .omni-years output{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink);
   min-width:96px}
 .omni-years label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.omni-years input[type=checkbox]{accent-color:var(--contain)}
 .omni-years .reset{appearance:none;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);
   font:inherit;font-size:12px;border-radius:6px;padding:3px 9px;cursor:pointer}
 .omni-years .reset[hidden]{display:none}
@@ -388,7 +396,8 @@ footer p{margin:0 0 6px;max-width:78ch}
     if(txt!=null)e.textContent=txt; return e; }
   function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
   function plural(noun){ return noun.replace(/ción$/, 'cione') + 's'; }
-  function ningun(noun){ return (/ción$/.test(noun) ? 'Ninguna ' : 'Ningún ') + noun; }
+  function fem(noun){ return /ción$/.test(noun); }
+  function ningun(noun){ return (fem(noun) ? 'Ninguna ' : 'Ningún ') + noun; }
 
   // --- filtro de años -------------------------------------------------------
   // Recalcula, para el rango elegido, lo mismo que la corrida calcula para todo
@@ -694,7 +703,8 @@ footer p{margin:0 0 6px;max-width:78ch}
     var D = DATA[dom], V = view(dom), act = yrActive();
     var items = [
       ['Unidades', V.nu.toLocaleString('es'),
-       act ? 'de ' + D.nu.toLocaleString('es') + ' · años ' + yrText() : plural(D.noun) + ' analizadas'],
+       act ? 'de ' + D.nu.toLocaleString('es') + ' · años ' + yrText() :
+             plural(D.noun) + (fem(D.noun) ? ' analizadas' : ' analizados')],
       ['Temas', V.nt, act ? 'con presencia en el rango' : 'espacio propio de este universo'],
     ];
     var dl = document.getElementById('metrics'); dl.textContent='';
@@ -715,16 +725,16 @@ footer p{margin:0 0 6px;max-width:78ch}
     list.textContent='';
     function byEq(a, b){ return V.eq[b] - V.eq[a]; }
     function present(id){ return V.n[id] > 0; }
-    var q = query.trim().toLowerCase();
+    var q = fold(query.trim());   // sin tildes, igual que el buscador global
     var rows;
     if (mode === 'unit' || (q && q.length >= 2)) {
       // con busqueda se mezclan temas y unidades, priorizando temas
       var t = Object.keys(D.topics).filter(function(id){
-        return present(id) && (!q || D.topics[id].l.toLowerCase().indexOf(q) >= 0); })
+        return present(id) && (!q || fold(D.topics[id].l).indexOf(q) >= 0); })
         .sort(byEq)
         .map(function(id){ return {kind:'t', id:id}; });
       var u = !q ? [] : Object.keys(D.units).filter(function(id){
-        return inYears(dom, id) && D.units[id].t.toLowerCase().indexOf(q) >= 0; })
+        return inYears(dom, id) && fold(D.units[id].t).indexOf(q) >= 0; })
         .slice(0,120).map(function(id){ return {kind:'u', id:id}; });
       rows = t.concat(u);
     } else {
@@ -778,9 +788,10 @@ footer p{margin:0 0 6px;max-width:78ch}
     box.textContent = '';
     if (!sel){
       box.appendChild(el('h3',null,'Elige un tema'));
-      box.appendChild(el('p','desc','La lista de la izquierda ordena los ' + D.nt +
-        ' temas por tamaño real (unidades-equivalentes). También puedes buscar un ' + D.noun +
-        ' concreto por su título para ver cómo se reparte entre temas.'));
+      box.appendChild(el('p','desc','La lista de la izquierda ordena los ' + V.nt +
+        ' temas por tamaño real (unidades-equivalentes). También puedes buscar ' +
+        (fem(D.noun) ? 'una ' : 'un ') + D.noun + (fem(D.noun) ? ' concreta' : ' concreto') +
+        ' por su título para ver cómo se reparte entre temas.'));
       return;
     }
     if (sel.kind === 't'){
@@ -830,11 +841,23 @@ footer p{margin:0 0 6px;max-width:78ch}
         'la unidad que más aporta al tema no es siempre la que más se dedica a él.'));
     } else {
       var u2 = D.units[sel.id], rws = (I.byUnit[sel.id]||[]);
+      // Con un rango activo, el aporte se mide contra el tamaño del tema dentro
+      // del rango, igual que en la tabla de cada tema; si no, ambas vistas
+      // darían cifras distintas para la misma celda.
+      var inRange = inYears(dom, sel.id);
+      if (yrActive() && inRange){
+        rws = rws.map(function(r){ return {t: r.t, c: r.c, k: V.eq[r.t] ? r.c / V.eq[r.t] : 0}; });
+      }
       var back = el('div','back');
       var bb = el('button','linkish','← volver a los temas'); bb.type='button';
       bb.addEventListener('click', function(){ sel=null; query=''; document.getElementById('q').value='';
         renderList(); renderDetail(); });
       back.appendChild(bb); box.appendChild(back);
+      if (yrActive()){
+        if (inRange) yrBanner(box, dom, V.nu, D.nu);
+        else box.appendChild(el('p', 'yr-banner', cap(D.noun) + ' fuera de los años elegidos (' + yrText() +
+          '): el aporte se muestra sobre todo el corpus.'));
+      }
       box.appendChild(el('h3', null, u2 ? u2.t : sel.id));
       var meta2 = [u2 && u2.y, u2 && u2.g].filter(Boolean).join(' · ');
       if (meta2) box.appendChild(el('p','desc', meta2));
@@ -888,6 +911,12 @@ footer p{margin:0 0 6px;max-width:78ch}
     if (!links){
       box.appendChild(el('p', 'desc', STATUS_TXT[C.status[uid]] || 'Sin cruce con CEPLAN para esta unidad.'));
       return;
+    }
+    if (yrActive() && inYears(d, uid)){
+      // mismo criterio que la tabla de temas: aporte dentro del rango
+      var CVs = cview(d).subs;
+      links = links.map(function(r){
+        var s = CVs[r[0]]; return [r[0], r[1], r[2], s && s.eq ? r[2] / s.eq : 0]; });
     }
     var shown = links.slice(0, C.top);
     var maxK = shown.reduce(function(m, r){ return Math.max(m, r[3]); }, 0.0001);
@@ -1369,6 +1398,9 @@ footer p{margin:0 0 6px;max-width:78ch}
     else if (ev.key === 'ArrowUp'){ ev.preventDefault(); omniMove(omniActive - 1); }
     else if (ev.key === 'Enter'){ if (omniActive >= 0 && omniItems[omniActive]){ ev.preventDefault(); omniItems[omniActive].go(); } }
     else if (ev.key === 'Escape'){
+      // Sin preventDefault, Chrome/Edge vacian el type=search por su cuenta y el
+      // evento input resultante volvia a abrir la lista: el primer Esc no cerraba.
+      ev.preventDefault();
       if (!omniRes.hidden) omniClose();
       else { omniq.value = ''; omniApplyYears(parseQuery('')); }
     }

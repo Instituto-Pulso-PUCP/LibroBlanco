@@ -36,7 +36,7 @@ DEFAULT_OUT = ROOT / "salidas" / "topics" / "atlas.html"
 
 # Etiqueta y sustantivo por dominio, para que los textos de la pagina concuerden.
 NOUNS = {
-    "projects": ("Proyectos de investigación PUCP cerrados (2010+)", "proyecto"),
+    "projects": ("Proyectos de investigación PUCP concluidos (2010+)", "proyecto"),
     "publications": ("Publicaciones PUCP (catálogo completo)", "publicación"),
     "publications_linked": ("Publicaciones derivadas de proyectos del universo", "publicación"),
 }
@@ -313,12 +313,20 @@ def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int)
     no quede desactualizado cuando cambia el universo (p.ej. 2026-10-11:
     646 -> 653 proyectos, 529 -> 462 publicaciones)."""
     if domain == "projects":
+        # Desde 2026-10-13 el universo parte de las filas de Proyectos CRIS
+        # (scripts/addons/build_projects_from_cris.py), no de la hoja de PULSO.
+        cris_files = sorted((ROOT / "datos").glob("ProyectosPUCPCRIS*.csv"))
+        n_cris = None
+        if cris_files:
+            with cris_files[-1].open(encoding="utf-8-sig", newline="") as fh:
+                csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
+                n_cris = sum(1 for _ in csv.DictReader(fh))
         return {
             "steps": [
-                {"n": 1928, "label": "Proyectos registrados en PULSO y CRIS",
-                 "note": "hoja PROYECTOS del Excel de PULSO"},
-                {"n": n_source, "label": "Cerrados y del 2010 en adelante",
-                 "note": "solo proyectos concluidos, en la ventana de años que usa el equipo"},
+                {"n": n_cris or 1891, "label": "Proyectos registrados en CRIS",
+                 "note": f"export {cris_files[-1].stem if cris_files else 'de Proyectos CRIS'}"},
+                {"n": n_source, "label": "Concluidos y con inicio desde 2010",
+                 "note": "estado «concluido» en CRIS; año de inicio de CRIS o, si falta, el de PULSO"},
                 {"n": n_units, "label": "Tienen título y resumen de CRIS",
                  "note": "un proyecto con solo título no alcanza para un análisis de texto "
                          "serio"},
