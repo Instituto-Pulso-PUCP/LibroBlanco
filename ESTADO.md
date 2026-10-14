@@ -40,6 +40,30 @@ publicación). `rerun_universos.sh` ya usa los dos scripts nuevos en el paso 1.
 Antes de relanzar: correr `recover_abstracts_external.py` para las ~1 100
 publicaciones declaradas nuevas (manual, horas) y revisar sus candidatos.
 
+**2026-10-14: aplicado en el servidor y búsqueda externa lanzada.** La cascada
+de publicaciones suma `datos/Publicaciones - CRIS - <fecha>.csv` (paso `cris`,
+por DOI o título idéntico: +72 resúmenes y +65 listas de palabras clave sobre
+las 2 315 declaradas). En el servidor ya se corrieron
+`build_projects_from_cris.py`, `build_declared_results.py` y
+`rebuild_linked_publications.py` (respaldo en `salidas/backup_20261014/`). La
+búsqueda externa corre sola, sin sesión, y agrega a
+`salidas/abstracts_recuperados/busqueda.jsonl` (copia de la del 10-11, así que
+salta las 369 ya buscadas):
+
+```bash
+# progreso (una línea por publicación buscada; "listo" y EXIT=0 al terminar)
+tail -3 salidas/abstracts_recuperados/busqueda.log
+wc -l salidas/abstracts_recuperados/busqueda.jsonl
+pgrep -af recover_abstracts_external     # vacío = terminó
+```
+
+Al terminar: `python3 scripts/addons/build_external_candidates.py` (agrega los
+hallazgos nuevos a `candidatos.csv` con veredicto; no toca las 49 filas ya
+decididas), revisar a mano las filas `revisar` y dejar `aceptar` o
+`rechazar`, y `python3 scripts/addons/rebuild_linked_publications.py`. Después
+recién relanzar `rerun_universos.sh` y publicar el atlas (pendiente, no
+autorizado aún).
+
 **Cambio 2026-10-11 (re-corridas `*-20261011`)**: (1) el merge CRIS aplica los
 overrides manuales → 646 a 653 proyectos; (2) la cascada de publicaciones
 descarta los abstracts de OpenAlex emparejados por título que eran de otra obra

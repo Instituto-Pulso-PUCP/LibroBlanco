@@ -25,7 +25,10 @@ Cascada de procedencia (se para en la primera que da texto util, >80 chars):
   5. source          idem, abstract de la fuente original (WoS/RI)
   6. pulso_wos       hoja `Pubs_WoS` del Excel de PULSO, por DOI o titulo
   7. vri_dfi         `datos/Publicaciones - VRI-DFI ....csv`, cruzado por titulo
-  8. externo         `salidas/abstracts_recuperados/candidatos.csv`, filas con
+  8. cris            `datos/Publicaciones - CRIS - <fecha>.csv` (el mas reciente),
+                     por DOI o por titulo normalizado identico en cualquiera de
+                     sus columnas de titulo (es, en, pt...). Desde 2026-10-13.
+  9. externo         `salidas/abstracts_recuperados/candidatos.csv`, filas con
                      veredicto "aceptar": abstracts buscados por DOI/titulo en
                      Semantic Scholar, Crossref, OpenAlex y Google Books
                      (scripts/addons/recover_abstracts_external.py), con el
@@ -34,7 +37,8 @@ Cascada de procedencia (se para en la primera que da texto util, >80 chars):
 Palabras clave, cuando faltan en master/ground-truth, en este orden:
 doi-resultados-final.csv (por DOI), hojas `Pubs_RI` (`key_words`) y `Pubs_WoS`
 (`keywords` + `keywords_plus`) del Excel de PULSO (por DOI o titulo), y los
-`dc.subject*` del CSV VRI-DFI (por titulo).
+`dc.subject*` del CSV VRI-DFI (por titulo) y los `dc.subject*` de Publicaciones
+CRIS (por DOI o titulo).
 
 El paso 6 y las hojas de PULSO importan sobre todo para los resultados que no
 cruzaron al catalogo maestro por DOI (ids `gt_*`): para ellos el master no
@@ -79,6 +83,7 @@ MIN_CHARS = 80   # por debajo de esto no es un abstract, es un resto
 # misma obra con el titulo traducido, por eso el DOI no pasa por este filtro.
 OPENALEX_MIN_TITLE_SIM = lb_titles.MIN_SEQUENCE
 EXTERNAL = ROOT / "salidas" / "abstracts_recuperados" / "candidatos.csv"
+CRIS_PUBS_GLOB = "Publicaciones - CRIS - *.csv"
 
 
 def norm_title(text: str) -> str:
@@ -135,6 +140,41 @@ def load_external() -> dict[str, dict]:
         if (row.get("veredicto") or "").strip() == "aceptar" and useful(row.get("abstract")):
             out[row["publication_id"]] = {"abstract": row["abstract"], "fuente": row.get("fuente", "")}
     return out
+
+
+def load_cris_publications() -> tuple[dict, dict, str]:
+    """(por DOI, por titulo normalizado) -> {abstract, keywords} desde el export
+    de Publicaciones CRIS mas reciente. Los titulos estan repartidos en columnas
+    por idioma (dc.title[es_PE], dc.title[en_US]...): se indexan todas."""
+    files = sorted((ROOT / "datos").glob(CRIS_PUBS_GLOB))
+    if not files:
+        return {}, {}, ""
+    by_doi, by_title = {}, {}
+    for r in read_csv(files[-1]):
+        abstract = ""
+        for col in ("dc.description.abstract[es_PE]", "dc.description.abstract[en_US]",
+                    "dc.description.abstract"):
+            abstract = useful(r.get(col))
+            if abstract:
+                break
+        if not abstract:
+            abstract = next((useful(v) for c, v in r.items()
+                             if c.startswith("dc.description.abstract") and useful(v)), "")
+        keywords = "; ".join(v.strip() for c, v in r.items()
+                             if c.startswith("dc.subject") and c != "dc.subject.ocde"
+                             and lb_domains.clean_value(v))
+        if not abstract and not keywords:
+            continue
+        entry = {"abstract": abstract, "keywords": keywords}
+        doi = norm_doi(r.get("dc.identifier.doi"))
+        if doi:
+            by_doi.setdefault(doi, entry)
+        for c, v in r.items():
+            if c.startswith("dc.title"):
+                t = norm_title(lb_domains.clean_value(v))
+                if len(t) > 15:
+                    by_title.setdefault(t, entry)
+    return by_doi, by_title, files[-1].name
 
 
 def load_openalex_titles() -> dict[tuple[str, str], str]:
@@ -211,6 +251,9 @@ def main():
         print(f"AVISO: no se encontro {OPENALEX_RAW.name}; no se puede verificar el titulo de los "
               "emparejamientos OpenAlex por titulo, asi que se descartan todos los que no sean por DOI.")
     openalex_rejected = 0
+    cris_by_doi, cris_by_title, cris_file = load_cris_publications()
+    print(f"Publicaciones CRIS ({cris_file}): {len(cris_by_doi):,} por DOI, {len(cris_by_title):,} títulos"
+          if cris_file else "Publicaciones CRIS no encontrado en datos/; se omite ese paso.")
     external = load_external()
     print(f"abstracts recuperados externamente (aceptados): {len(external)}"
           if external else f"{EXTERNAL.name} no encontrado o sin aceptados; se omite el paso externo.")
@@ -249,6 +292,8 @@ def main():
         doi_hit = doi_resultados.get(doi, {})
         pulso_hits = (pulso_by_doi.get(doi, []) if doi else []) + (
             pulso_by_title.get(norm_title(title), []) if title else [])
+        cris_hit = (cris_by_doi.get(doi) if doi else None) or (
+            cris_by_title.get(norm_title(title)) if title else None) or {}
 
         # OpenAlex: por DOI vale siempre; por titulo, solo si el titulo coincide.
         openalex_abstract = record.get("openalex_abstract")
@@ -270,6 +315,7 @@ def main():
             (record.get("source_abstract"), "source"),
             (next((h["abstract"] for h in pulso_hits if h["abstract"]), ""), "pulso_wos"),
             (vri.get(norm_title(title)) if title else "", "vri_dfi"),
+            (cris_hit.get("abstract"), "cris"),
             ((external.get(row_id) or {}).get("abstract"), "externo"),
         ):
             text = useful(candidate)
@@ -286,6 +332,7 @@ def main():
                 (next((h["keywords"] for h in pulso_hits
                        if h["sheet"] == "pulso_wos" and h["keywords"]), ""), "pulso_wos"),
                 (vri_kw.get(norm_title(title)) if title else "", "vri_dfi"),
+                (cris_hit.get("keywords"), "cris"),
             ):
                 keywords = lb_domains.clean_value(candidate)
                 if keywords:
