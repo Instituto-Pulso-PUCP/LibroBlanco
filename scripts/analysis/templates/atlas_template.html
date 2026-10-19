@@ -635,11 +635,12 @@ footer p{margin:0 0 6px;max-width:78ch}
            'quedó cada unidad se explica en la pestaña <b>Datos de origen</b>.</p>');
 
     h.push('<h3>Modelos</h3>');
-    h.push('<p>La extracción y el nombrado corren sobre <code>Claude Sonnet 5</code> en Amazon ' +
-           'Bedrock, con esfuerzo <code>low</code> (este modelo ya no usa temperatura). Los ' +
-           'embeddings salen de <code>cohere.embed-multilingual-v3</code>, con 1024 dimensiones, ' +
-           'troceando y promediando los textos de más de 2048 caracteres, y los vectores quedan ' +
-           'guardados en PostgreSQL con pgvector.</p>');
+    h.push('<p>La extracción y el nombrado corren sobre <code>Claude Sonnet 5</code> a través de ' +
+           'LibreChat PUCP, con un agente sin instrucciones propias para que no se mezclen con las ' +
+           'del análisis. Los embeddings salen de <code>cohere.embed-multilingual-v3</code> en ' +
+           'Amazon Bedrock, con 1024 dimensiones, troceando y promediando los textos de más de ' +
+           '2048 caracteres, y los vectores quedan guardados en PostgreSQL con pgvector. El cruce ' +
+           'con los Objetivos Nacionales usa <code>Llama 4 Maverick</code>, también en Bedrock.</p>');
     box.innerHTML = h.join('');
   }
 
@@ -716,8 +717,8 @@ footer p{margin:0 0 6px;max-width:78ch}
       w.appendChild(dd); dl.appendChild(w);
     });
     document.getElementById('prov').textContent =
-      'Corrida ' + D.run + ' · ' + D.label + ' · extracción con Claude Sonnet 5 y embeddings ' +
-      'cohere.embed-multilingual-v3 sobre Amazon Bedrock.';
+      'Corrida ' + D.run + ' · ' + D.label + ' · extracción con Claude Sonnet 5 (LibreChat PUCP) ' +
+      'y embeddings cohere.embed-multilingual-v3 (Amazon Bedrock).';
   }
 
   function renderList(){
@@ -996,6 +997,14 @@ footer p{margin:0 0 6px;max-width:78ch}
     box.appendChild(el('p', 'desc', 'Qué sub-temáticas de la hoja «Líneas de Inv.» del PEDN 2050 ' +
       '(4 Objetivos Nacionales, 126 sub-temáticas) desarrolla cada ' + D.noun + ', y quién desarrolla ' +
       'cada sub-temática.'));
+    box.appendChild(el('p', 'note', 'Cómo se obtiene: se comparan los embeddings de cada unidad y ' +
+      'de cada sub-temática (en español y en inglés) y se toman como candidatas las más cercanas, ' +
+      'con similitud de al menos 0,40. Un modelo de lenguaje (Llama 4 Maverick) califica cada ' +
+      'candidata: 2 si la unidad la desarrolla claramente, 1 si la relación es tangencial y 0 si no ' +
+      'hay relación. Una sub-temática está desarrollada si al menos 3 unidades tienen calificación 2, ' +
+      'débil si tiene 1 o 2, y sin desarrollo si no tiene ninguna. En una revisión manual de 130 ' +
+      'vínculos, el 84 % tenía una relación real; una calificación 2 indica una relación real con ' +
+      'alta confianza (91 %), no necesariamente que la sub-temática sea el centro de la unidad (53 %).'));
 
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
     avail.forEach(function(d){

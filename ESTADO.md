@@ -1,23 +1,40 @@
-# Estado del pipeline de temas — 2026-10-12
+# Estado del pipeline de temas — 2026-10-18
 
 ## Corridas vigentes (las que usa el atlas publicado)
 
 | | proyectos | publicaciones ligadas |
 |---|---|---|
-| run_id | `full-proj-20261011` | `publications_linked-20261011` |
-| unidades | 653 | 462 |
-| temas normalizados | 137 | 93 |
-| `PC` normalizado | 0.3901 | 0.4647 |
+| run_id | `full-proj-20261018` | `publications_linked-20261018` |
+| unidades | 1 189 | 817 |
+| temas extraídos | 4 382 | 2 876 |
+| temas normalizados | 202 | 137 |
+| `PC` normalizado | 0.3468 | 0.4232 |
+| temas efectivos por unidad | 3.33 | 2.78 |
+| unidades efectivas por tema | 18.3 | 15.7 |
 
-Atlas publicado (versión 22, 2026-10-12): https://claude.ai/artifact/2NWxFbYtfyhtLhjPMUYyFU
+Atlas publicado (versión 25, 2026-10-18): https://claude.ai/artifact/2NWxFbYtfyhtLhjPMUYyFU
 — compartido con cualquiera que tenga el enlace.
 
-Universo **filtrado por el mínimo declarado** (no todo lo que hay en PULSO
-entra): proyectos con `title` + `cris_abstract` (975 → 653); publicaciones
-ligadas con `title` + `abstract`, sin exigir que el proyecto que la declaró
-también califique (1 192 → 462). Detalle completo del embudo y por qué se
-decidió así: `docs/cuantificacion_temas.md` §7, o la pestaña **Datos de
-origen** del atlas.
+Universo **filtrado por el mínimo declarado**: proyectos de CRIS concluidos
+desde 2010 con `title` + `cris_abstract` (1 891 filas CRIS → 1 687 → 1 189);
+publicaciones declaradas por esos proyectos con `title` + `abstract`
+(2 312 → 835 filas → 817 publicaciones distintas). Detalle del embudo:
+`docs/cuantificacion_temas.md` §7, o la pestaña **Datos de origen** del atlas.
+
+**Cambio 2026-10-18 — re-corrida con el universo CRIS, extracción por
+LibreChat.** Terminó la búsqueda externa (577 publicaciones buscadas, 71 con
+hallazgo; 22 nuevas en `candidatos.csv`). Las 21 filas `revisar` se
+decidieron a mano: 14 aceptadas y 7 rechazadas (capítulo con el abstract del
+libro o del congreso, o título distinto sin certeza de misma obra; ante la
+duda, rechazar). `candidatos.csv` queda en 57 `aceptar` / 14 `rechazar`
+(respaldos `candidatos_2026-10-11.csv` y `candidatos_pre_revision_20261018.csv`).
+Re-corrida con `REEXTRACT=1`: **todas** las unidades se extrajeron de nuevo
+con Sonnet 5 vía LibreChat (ver sección LibreChat), para no mezclar dos vías en
+un mismo atlas; los embeddings de unidad se reusaron (Cohere, sin cambios).
+Un grupo de proyectos quedó nombrado con su tema principal porque LibreChat
+devolvió una respuesta vacía tres veces. Costo en Bedrock (Cohere + Llama):
+menos de USD 1; los ~USD 20 que muestran los reportes de uso para extracción y
+nombre están valorizados a precio de Bedrock pero pasaron por LibreChat.
 
 **Cambio 2026-10-13 — universo de proyectos desde CRIS (código listo, sin
 correr en el servidor).** Los proyectos ya no parten de la hoja PROYECTOS de
@@ -120,9 +137,11 @@ calibración, benchmark de 7 modelos contra 100 pares humanos y validación:
 - **Precisión validada a mano: 84 %** de los vínculos listados (130 vínculos,
   24 unidades al azar). El «clara» del modelo equivale a «relación real» (91 %),
   no a desarrollo claro (53 %).
-- Corridas `*-20261011`: proyectos 624/653 con alguna sub-temática (96 %),
-  publicaciones 325/462 (70 %). Solo *Minería ilegal* no tiene relación clara
-  en ningún dominio.
+- Corridas `*-20261018`: proyectos 1 156/1 189 con alguna sub-temática (97 %),
+  publicaciones 651/817 (80 %). Sub-temáticas desarrolladas / débiles / sin
+  desarrollo: 114/11/1 en proyectos, 95/25/6 en publicaciones (antes, con las
+  `*-20261011`: 102/22/2 y 76/37/13). Una sola sub-temática no tiene relación
+  clara en ningún dominio.
 - Salidas: `salidas/topics/<dominio>/<run>/07_ceplan_units.json`,
   `ceplan_por_unidad.csv`, `ceplan_por_subtematica.csv`,
   `reporte_ceplan_unidades.md`; conjunta en `salidas/topics/ceplan/`.
@@ -151,14 +170,24 @@ publicaciones → etapas 01–05 de ambos dominios → cruce CEPLAN → atlas):
 
 ```bash
 cd ~/LibroBlanco
-OLD_PROJ=full-proj-20261011 OLD_PUBS=publications_linked-20261011 \
-  setsid nohup scripts/pipeline_temas/rerun_universos.sh > /dev/null 2>&1 &
+OLD_PROJ=full-proj-20261018 OLD_PUBS=publications_linked-20261018 \
+  setsid -f bash scripts/pipeline_temas/rerun_universos.sh > salidas/topics/rerun_launch.out 2>&1 < /dev/null
 tail -f salidas/topics/rerun_universos.log   # termina en rerun_universos.DONE o .FAILED
 ```
 
+Lanzado por ssh desde otra máquina, usar `setsid -f` (con `setsid nohup ... &`
+el proceso muere al cerrarse la sesión). Los errores de arranque, antes de que
+el script abra su log, quedan en `rerun_launch.out`. Si el script se copió
+desde Windows, quitarle los CRLF (`sed -i 's/\r$//'`): con ellos falla en
+`set -o pipefail`.
+
 Reusa la extracción y el embedding **solo de las unidades con texto idéntico**
 (`seed_same_text.py`), así que es correcto aunque cambie el texto de algunas.
-Si falla, relanzar con el mismo `TAG=<fecha>`: cada paso retoma desde su cache.
+`REEXTRACT=1` descarta la extracción reusada (todas las unidades pasan otra vez
+por el LLM, p.ej. al cambiar de modelo o de vía) y conserva los embeddings.
+Si falla, relanzar con el mismo `TAG=<fecha>`: cada paso retoma desde su cache,
+también con `REEXTRACT=1` (el cache que ya existe es de la misma corrida y no
+se borra).
 Publicar el atlas (`salidas/topics/atlas.html`) es aparte, desde una sesión.
 
 Por dominio, a mano:
@@ -181,12 +210,31 @@ Ahora son matrices `numpy` float32 de extremo a extremo (Bedrock → agrupamient
 → pgvector), sin pérdida de precisión (pgvector guarda `vector` en float32 de
 por sí). Medido a escala real: 1 638 MB → 201 MB, ~13 h proyectadas → 8.7 s.
 
-## LibreChat: descartado como vía de ejecución (hallazgo permanente)
+## LibreChat: vía de extracción y nombre de temas (desde 2026-10-18)
 
-No expone API compatible con OpenAI (`/v1/chat/completions` devuelve el HTML de
-la web) y `/api/balance` rechaza la API key con 401. La clave de la OTD es una
-API key de Bedrock (factura igual que boto3); el endpoint compatible con
-OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
+LibreChat PUCP (https://chat.txdpucp.net) expone el **Agents API**, compatible
+con OpenAI, en `/api/agents/v1/chat/completions`. El 2026-10-11 se descartó
+porque se probó la raíz (`/v1/chat/completions` devuelve el HTML de la web);
+esa conclusión era incorrecta.
+
+- Configuración (`config/env.sh` del servidor):
+  `LB_GATEWAY__BASE_URL='https://chat.txdpucp.net/api/agents'`,
+  `LB_GATEWAY__API_KEY` (clave de LibreChat, no la de Bedrock que empieza por
+  `ABSK`) y `LB_GATEWAY__CHAT_MODEL` = id del agente (`agent_...`, no su
+  nombre). En `config/pipeline.toml`: `[gateway] enabled = true`,
+  `use_for = "chat"`.
+- El agente (*LibroBlancoTest*) usa **Sonnet 5**, sin instrucciones ni
+  herramientas, para que no se mezclen con el prompt de extracción.
+- Solo chat: extracción (etapa 02), nombre de grupos (etapa 03) y traducción
+  de sub-temáticas. Los embeddings (Cohere) y el verificador CEPLAN (Llama 4
+  Maverick, `BedrockClient` directo) siguen en Bedrock.
+- Comparación previa con 8 unidades contra la extracción de Bedrock: mismo
+  formato, mismos temas principales; LibreChat agrega a veces un tema
+  secundario más (29 vs. 25 temas; 28 vs. 24 con cita literal).
+- Devuelve `usage`, así que los tokens se miden. A veces responde 200 con
+  `content` vacío: `OpenAICompatClient.complete` reintenta 3 veces y luego
+  devuelve "" (cada etapa aplica su respaldo).
+- Sin datos aún sobre límites de uso o tope de créditos de la instancia.
 
 ## Pendiente
 
@@ -211,10 +259,6 @@ OpenAI de Bedrock no sirve modelos Claude, solo de peso abierto.
   publicaciones tienen un `openalex_doi` que viene de ese emparejamiento sin
   verificar (solo 2 coinciden). Revisar también las cifras de OpenAlex de las
   láminas del 15-08 (autores, revista, país).
-- **12 abstracts recuperados por decidir** (`salidas/abstracts_recuperados/
-  candidatos.csv`, veredicto `revisar`): probablemente la misma obra con otro
-  título (p.ej. charla de congreso publicada luego como artículo). Si se
-  aceptan, cambiar el veredicto a `aceptar` y relanzar `rerun_universos.sh`.
 - **59 publicaciones con palabras clave pero sin abstract** quedan fuera del
   universo; entrarían si el mínimo aceptara título + palabras clave. Decisión
   de criterio pendiente.

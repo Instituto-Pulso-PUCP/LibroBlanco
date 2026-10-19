@@ -13,6 +13,10 @@
 #   OLD_PROJ=full-proj-646           corrida de projects de donde se reusa
 #   OLD_PUBS=publications_linked-529 corrida de publications_linked de donde se reusa
 #   TAG=$(date +%Y%m%d)              sufijo de las corridas nuevas
+#   REEXTRACT=0                      1 = no reusar la extraccion (etapa 02):
+#                                    todas las unidades pasan otra vez por el
+#                                    LLM (p.ej. al cambiar de modelo o de
+#                                    pasarela). Los embeddings se siguen reusando.
 #
 # Pasos: 1 maestro de proyectos desde CRIS + resultados declarados de PULSO ->
 # 2 rebuild publicaciones ligadas -> 3 por dominio:
@@ -26,6 +30,7 @@ source config/env.sh
 OLD_PROJ=${OLD_PROJ:-full-proj-646}
 OLD_PUBS=${OLD_PUBS:-publications_linked-529}
 TAG=${TAG:-$(date +%Y%m%d)}
+REEXTRACT=${REEXTRACT:-0}
 NEW_PROJ="full-proj-${TAG}"
 NEW_PUBS="publications_linked-${TAG}"
 LOG=salidas/topics/rerun_universos.log
@@ -59,7 +64,15 @@ for pair in "projects:$OLD_PROJ:$NEW_PROJ" "publications_linked:$OLD_PUBS:$NEW_P
   step "3/5 $dom: etapa 01 ($new)"
   python3 scripts/pipeline_temas/01_prep_units.py --domain "$dom" --run-id "$new"
   step "3/5 $dom: reusar extraccion/embeddings con texto identico desde $old"
+  # Un cache que ya existe es de esta misma corrida (relanzada con el mismo
+  # TAG): se conserva para retomar, tambien con REEXTRACT=1.
+  cache="salidas/topics/$dom/$new/02_extraction_cache.jsonl"
+  had_cache=0; [ -f "$cache" ] && had_cache=1
   python3 scripts/pipeline_temas/seed_same_text.py --domain "$dom" --from-run "$old" --to-run "$new"
+  if [ "$REEXTRACT" = "1" ] && [ "$had_cache" = "0" ]; then
+    echo "REEXTRACT=1: se descarta la extraccion reusada; la etapa 02 consulta todas las unidades"
+    rm -f "$cache"
+  fi
   step "3/5 $dom: etapas 02-05"
   python3 scripts/pipeline_temas/run_domain.py --domain "$dom" --run-id "$new" --from 02
 done

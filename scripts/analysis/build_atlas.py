@@ -280,6 +280,15 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
     raw_rows = lb_domains.read_source(spec)
     if run_unit_ids is not None:
         rows = [r for r in raw_rows if lb_domains.clean_value(r.get(spec.id_column)) in run_unit_ids]
+        # Una publicacion declarada por dos proyectos tiene dos filas, y puede
+        # que solo una consiguiera resumen (2026-10-18: la 6014). La unidad se
+        # armo con la fila que cumple el minimo; la otra no debe contar en la
+        # tabla de llenado. Solo se quita una fila si otra con su id cumple.
+        passing, _ = lb_domains.filter_min_requirements(spec, rows)
+        ok_ids = {lb_domains.clean_value(r.get(spec.id_column)) for r in passing}
+        passing_ids = {id(r) for r in passing}
+        rows = [r for r in rows if id(r) in passing_ids
+                or lb_domains.clean_value(r.get(spec.id_column)) not in ok_ids]
         dropped_min_req = len(raw_rows) - len(rows)
     else:
         rows, dropped_min_req = lb_domains.filter_min_requirements(spec, raw_rows)
@@ -331,7 +340,11 @@ def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int)
                  "note": "un proyecto con solo título no alcanza para un análisis de texto "
                          "serio"},
             ],
-            "why": "",
+            "why": ("El universo lo definen los registros de CRIS y no la hoja de proyectos de "
+                    "PULSO, porque PULSO tarda en marcar los proyectos como cerrados: al "
+                    "2026-10-13, 670 proyectos que CRIS ya daba por concluidos figuraban en "
+                    "PULSO con otro estado. De PULSO se toman solo el código AERI (necesario "
+                    "para los resultados declarados) y metadatos como la unidad o el área."),
         }
     if domain == "publications_linked":
         dup = n_qualified - n_units
@@ -348,7 +361,16 @@ def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int)
                  "note": (f"{dup} publicaciones estaban declaradas por más de un proyecto y se "
                           "cuentan una sola vez") if dup else "no había duplicados"},
             ],
-            "why": "",
+            "why": ("Solo entran las publicaciones que el propio proyecto declaró como resultado; "
+                    "no se infieren vínculos por autoría ni por otras vías. El resumen se busca "
+                    "en este orden y se usa el primero útil (al menos 80 caracteres): catálogo "
+                    "de publicaciones (Scopus, WoS y Repositorio Institucional), resúmenes por "
+                    "DOI, OpenAlex, la fuente original, la hoja Pubs_WoS, VRI-DFI, Publicaciones "
+                    "CRIS y una búsqueda externa (Semantic Scholar, Crossref, OpenAlex y Google "
+                    "Books). Un resumen hallado por título solo se acepta si es de la misma obra: "
+                    "títulos con similitud de al menos 0,85, o que compartan el 85 % de sus "
+                    "palabras de contenido. Los casos dudosos los revisa una persona y, ante la "
+                    "duda, se rechazan."),
         }
     return {"steps": [], "why": ""}
 

@@ -467,14 +467,21 @@ class OpenAICompatClient:
     def complete(self, system: str, user: str, model_id: str | None = None,
                  max_tokens: int | None = None, temperature: float | None = None) -> str:
         model = model_id or self.cfg.require("gateway.chat_model")
-        payload, stats = self._post("chat/completions", {
+        body = {
             "model": model,
             "max_tokens": int(max_tokens or self.cfg.get("bedrock.llm_max_tokens", 2048)),
             "temperature": float(temperature if temperature is not None
                                  else self.cfg.get("bedrock.llm_temperature", 0.0)),
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
-        })
+        }
+        # El Agents API de LibreChat a veces responde 200 con content=None
+        # (2026-10-18, al nombrar un grupo). Se reintenta; si sigue vacio se
+        # devuelve "" y cada etapa aplica su propio respaldo.
+        for _ in range(3):
+            payload, stats = self._post("chat/completions", body)
+            if (payload.get("choices") or [{}])[0].get("message", {}).get("content"):
+                break
         usage = payload.get("usage") or {}
         if self.stage:
             self.stage.record_llm(
@@ -487,7 +494,11 @@ class OpenAICompatClient:
             # Sin 'usage' no hay forma de medir el consumo de este paso.
             self.stage.notes.setdefault("avisos", []).append(
                 "La pasarela no devuelve 'usage': los tokens de chat quedan sin medir.")
-        return payload["choices"][0]["message"]["content"]
+        content = (payload.get("choices") or [{}])[0].get("message", {}).get("content")
+        if not content and self.stage:
+            self.stage.notes.setdefault("avisos", []).append(
+                "La pasarela devolvio una respuesta vacia tras 3 intentos.")
+        return content or ""
 
     def embed(self, texts: list[str], model_id: str | None = None):
         model = model_id or self.cfg.require("gateway.embedding_model")
