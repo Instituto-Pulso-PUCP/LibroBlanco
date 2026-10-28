@@ -167,6 +167,7 @@ td.k .track i{background:var(--contrib)} td.c .track i{background:var(--contain)
 .fills td{padding:6px 15px;border-bottom:1px solid var(--line)}
 .fills tr:last-child td{border-bottom:0}
 .fills .cn{font-family:"IBM Plex Mono",monospace;font-size:12.2px}
+.fills .cn .opt{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:11.5px;color:var(--ink-3)}
 .fills .bar-td{width:46%}
 .fills .pc{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
   font-size:12.2px;white-space:nowrap}
@@ -374,6 +375,55 @@ footer p{margin:0 0 6px;max-width:78ch}
   "use strict";
   var DATA = JSON.parse(document.getElementById('data').textContent);
   var META = JSON.parse(document.getElementById('method-data').textContent);
+
+  // Textos por dominio. build_atlas.py solo manda numeros; todo lo que se lee
+  // en la pagina se escribe aqui.
+  var DOMINIOS = {
+    projects: {label: 'Proyectos de investigación PUCP concluidos (2010+)', noun: 'proyecto'},
+    publications: {label: 'Publicaciones PUCP (catálogo completo)', noun: 'publicación'},
+    publications_linked: {label: 'Publicaciones derivadas de proyectos del universo', noun: 'publicación'}
+  };
+  Object.keys(DATA).forEach(function(d){
+    var t = DOMINIOS[d] || {label: d, noun: 'unidad'};
+    DATA[d].label = t.label; DATA[d].noun = t.noun;
+  });
+
+  // Pestaña «Datos de origen»: el embudo de cada universo. `p` son los conteos
+  // que calcula build_atlas.provenance_counts() sobre la corrida mostrada.
+  var PROCEDENCIA = {
+    projects: function(p){
+      return {
+        steps: [
+          {n: p.cris, label: 'Proyectos registrados en CRIS',
+           note: 'export ' + (p.cris_file || 'de Proyectos CRIS')},
+          {n: p.source, label: 'Concluidos y con inicio desde 2010',
+           note: 'estado «concluido» en CRIS; año de inicio de CRIS o, si falta, el de PULSO'},
+          {n: p.units, label: 'Tienen título y resumen de CRIS',
+           note: 'un proyecto con solo título no alcanza para un análisis de texto serio'}
+        ],
+        why: 'El universo lo definen los registros de CRIS y no la hoja de proyectos de ' +
+             'PULSO. De PULSO se toman solo el código AERI.'
+      };
+    },
+    publications_linked: function(p){
+      var dup = p.qualified - p.units;
+      return {
+        steps: [
+          {n: p.source, label: 'Publicaciones que un proyecto del universo declaró como su resultado',
+           note: 'archivo publications_linked_full'},
+          {n: p.qualified, label: 'Tienen título y resumen',
+           note: 'una publicación con solo título no alcanza para un análisis de texto serio; ' +
+                 'los resúmenes buscados por título se verifican contra el título declarado'},
+          {n: p.units, label: 'Publicaciones distintas tras quitar duplicados',
+           note: dup ? dup.toLocaleString('es') + ' publicaciones estaban declaradas por más de ' +
+                       'un proyecto y se cuentan una sola vez'
+                     : 'no había duplicados'}
+        ],
+        why: 'Solo entran las publicaciones que el propio proyecto declaró como resultado.'
+      };
+    }
+  };
+
   var dom = 'projects', mode = 'topic', sel = null, query = '';
   var idx = {};
 
@@ -656,7 +706,8 @@ footer p{margin:0 0 6px;max-width:78ch}
            'puso ahí el corte, y cuánto texto queda al final en cada unidad.</p>');
 
     Object.keys(META).forEach(function(d){
-      var m = META[d], prov = m.provenance || {steps: [], why: ''};
+      var m = META[d];
+      var prov = (m.prov && PROCEDENCIA[d]) ? PROCEDENCIA[d](m.prov) : {steps: [], why: ''};
       h.push('<h3>' + NAMES[d] + '</h3>');
 
       h.push('<div class="flow">');
@@ -677,10 +728,12 @@ footer p{margin:0 0 6px;max-width:78ch}
         return '<span class="chip">' + c[0] + ' <b>' + c[1].toLocaleString('es') + '</b></span>';
       }).join('') + '</div>');
 
-      // Tabla de llenado por columna: solo las que de verdad se exigen (100%
-      // en la poblacion filtrada). Las opcionales y las de respaldo (aux) no
-      // aportan a "que se esta considerando", asi que no se muestran aqui.
-      var cols = m.cols.filter(function(c){ return c.f >= 0.999; });
+      // Tabla de llenado por columna: todas las que entran al texto embebido.
+      // Las que no estan en todas las unidades (p.ej. keywords de las
+      // publicaciones) tambien aportan cuando existen, y se marcan como tales.
+      // Las de respaldo (aux) solo completan otra columna y no se muestran;
+      // journal tampoco se muestra.
+      var cols = m.cols.filter(function(c){ return !c.aux && c.n !== 'journal'; });
       h.push('<div class="exp" style="margin-top:14px"><div class="exp-head">' +
              '<span class="nm">Qué columnas dan ese texto</span>' +
              '<span class="fl">' + m.src + ', ' + m.rows.toLocaleString('es') +
@@ -689,7 +742,8 @@ footer p{margin:0 0 6px;max-width:78ch}
                ' descartadas por no tener ' + m.req.join(' ni ') : '') +
              '</span></div><table class="fills"><tbody>');
       cols.forEach(function(c){
-        h.push('<tr><td class="cn">' + c.n.replace('aux:', '') + '</td>' +
+        h.push('<tr><td class="cn">' + c.n +
+               (c.f < 1 ? '<span class="opt">si existe</span>' : '') + '</td>' +
                '<td class="bar-td"><div class="track"><i style="width:' +
                Math.max(1.5, c.f * 100).toFixed(1) + '%;background:var(--contain)"></i></div></td>' +
                '<td class="pc">' + (c.f * 100).toFixed(1) + ' %  ·  ' +

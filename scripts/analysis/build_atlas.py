@@ -34,13 +34,6 @@ import lb_store      # noqa: E402
 TEMPLATE = Path(__file__).resolve().parent / "templates" / "atlas_template.html"
 DEFAULT_OUT = ROOT / "salidas" / "topics" / "atlas.html"
 
-# Etiqueta y sustantivo por dominio, para que los textos de la pagina concuerden.
-NOUNS = {
-    "projects": ("Proyectos de investigación PUCP concluidos (2010+)", "proyecto"),
-    "publications": ("Publicaciones PUCP (catálogo completo)", "publicación"),
-    "publications_linked": ("Publicaciones derivadas de proyectos del universo", "publicación"),
-}
-
 
 def decompose(cfg, store, unit_id, topics):
     """Rehace, solo para la unidad del ejemplo, las dos mitades de su fila.
@@ -245,8 +238,7 @@ def collect(cfg, domain: str, run_id: str) -> dict:
              for r in rows]
     cells.sort(key=lambda c: (c[0], -c[2]))
     side = partition.get("unit_side") or {}
-    label, noun = NOUNS.get(domain, (domain, "unidad"))
-    return {"run": run_id, "label": label, "noun": noun,
+    return {"run": run_id,
             "topics": topics, "units": units, "cells": cells,
             "ex": examples(cfg, store, rows, topics, units, raw_topics),
             "pc": round(side.get("partition_coefficient") or 0, 4),
@@ -312,15 +304,15 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
             "units": report["units_built"], "dropped": report["units_dropped"],
             "chars": report["text_chars"], "cols": cols, "req": spec.required_any,
             "raw_rows": len(raw_rows), "dropped_min_req": dropped_min_req,
-            "provenance": provenance_notes(domain, len(raw_rows), len(rows), len(units))}
+            "prov": provenance_counts(domain, len(raw_rows), len(rows), len(units))}
 
 
-def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int) -> dict:
-    """El embudo completo hasta la poblacion final: de donde salen los datos
-    y por que se quedo tan poca. El primer paso (total en PULSO) es un dato
-    externo escrito a mano; el resto sale de la corrida que se muestra, para que
-    no quede desactualizado cuando cambia el universo (p.ej. 2026-10-11:
-    646 -> 653 proyectos, 529 -> 462 publicaciones)."""
+def provenance_counts(domain: str, n_source: int, n_qualified: int, n_units: int) -> dict:
+    """Conteos del embudo hasta la poblacion final, para la pestaña «Datos de
+    origen». Salen de la corrida que se muestra, para que no queden
+    desactualizados cuando cambia el universo (p.ej. 2026-10-11: 646 -> 653
+    proyectos, 529 -> 462 publicaciones). Los textos de cada paso y la
+    explicacion estan en la plantilla (PROCEDENCIA)."""
     if domain == "projects":
         # Desde 2026-10-13 el universo parte de las filas de Proyectos CRIS
         # (scripts/addons/build_projects_from_cris.py), no de la hoja de PULSO.
@@ -330,49 +322,11 @@ def provenance_notes(domain: str, n_source: int, n_qualified: int, n_units: int)
             with cris_files[-1].open(encoding="utf-8-sig", newline="") as fh:
                 csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
                 n_cris = sum(1 for _ in csv.DictReader(fh))
-        return {
-            "steps": [
-                {"n": n_cris or 1891, "label": "Proyectos registrados en CRIS",
-                 "note": f"export {cris_files[-1].stem if cris_files else 'de Proyectos CRIS'}"},
-                {"n": n_source, "label": "Concluidos y con inicio desde 2010",
-                 "note": "estado «concluido» en CRIS; año de inicio de CRIS o, si falta, el de PULSO"},
-                {"n": n_units, "label": "Tienen título y resumen de CRIS",
-                 "note": "un proyecto con solo título no alcanza para un análisis de texto "
-                         "serio"},
-            ],
-            "why": ("El universo lo definen los registros de CRIS y no la hoja de proyectos de "
-                    "PULSO, porque PULSO tarda en marcar los proyectos como cerrados: al "
-                    "2026-10-13, 670 proyectos que CRIS ya daba por concluidos figuraban en "
-                    "PULSO con otro estado. De PULSO se toman solo el código AERI (necesario "
-                    "para los resultados declarados) y metadatos como la unidad o el área."),
-        }
+        return {"cris": n_cris or 1891, "cris_file": cris_files[-1].stem if cris_files else "",
+                "source": n_source, "units": n_units}
     if domain == "publications_linked":
-        dup = n_qualified - n_units
-        return {
-            "steps": [
-                {"n": n_source, "label": "Publicaciones que un proyecto del universo declaró "
-                                         "como su resultado",
-                 "note": "archivo publications_linked_full"},
-                {"n": n_qualified, "label": "Tienen título y resumen",
-                 "note": "una publicación con solo título no alcanza para un análisis de "
-                         "texto serio; los resúmenes buscados por título se verifican contra "
-                         "el título declarado"},
-                {"n": n_units, "label": "Publicaciones distintas tras quitar duplicados",
-                 "note": (f"{dup} publicaciones estaban declaradas por más de un proyecto y se "
-                          "cuentan una sola vez") if dup else "no había duplicados"},
-            ],
-            "why": ("Solo entran las publicaciones que el propio proyecto declaró como resultado; "
-                    "no se infieren vínculos por autoría ni por otras vías. El resumen se busca "
-                    "en este orden y se usa el primero útil (al menos 80 caracteres): catálogo "
-                    "de publicaciones (Scopus, WoS y Repositorio Institucional), resúmenes por "
-                    "DOI, OpenAlex, la fuente original, la hoja Pubs_WoS, VRI-DFI, Publicaciones "
-                    "CRIS y una búsqueda externa (Semantic Scholar, Crossref, OpenAlex y Google "
-                    "Books). Un resumen hallado por título solo se acepta si es de la misma obra: "
-                    "títulos con similitud de al menos 0,85, o que compartan el 85 % de sus "
-                    "palabras de contenido. Los casos dudosos los revisa una persona y, ante la "
-                    "duda, se rechazan."),
-        }
-    return {"steps": [], "why": ""}
+        return {"source": n_source, "qualified": n_qualified, "units": n_units}
+    return {}
 
 
 def main():
