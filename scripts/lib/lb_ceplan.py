@@ -4,8 +4,9 @@ No es un dominio como projects/publications: no tiene unidades que embeber ni
 temas que extraer con un LLM. CEPLAN ya trae su propia taxonomia oficial,
 nombrada -- usar un LLM para "redescubrirla" seria peor que usarla tal cual.
 Este modulo solo la convierte en un arbol ON -> Tematica -> Sub-tematica con
-texto listo para embeber, para comparar contra los temas normalizados de
-projects/publications_linked (ver scripts/pipeline_temas/06_ceplan_alignment.py).
+texto listo para embeber. lb_plans lo expone como el plan "pedn2050", uno de
+los planes nacionales contra los que scripts/analysis/ceplan_units.py cruza las
+unidades.
 
 Estructura del libro (ver docs/cuantificacion_temas.md para el detalle):
   - Hojas "ON 1".."ON 4 ": la matriz completa (Politica de Estado -> Politica
@@ -156,7 +157,9 @@ _TRANSLATE_SYSTEM = (
     "arreglo JSON de strings, uno por texto de entrada, en el mismo orden.")
 
 
-def translate_texts(llm, texts: list[str], batch_size: int = 15) -> dict[str, str]:
+def translate_texts(llm, texts: list[str], batch_size: int = 15,
+                    cache_path: Path = TRANSLATION_CACHE,
+                    system: str = _TRANSLATE_SYSTEM) -> dict[str, str]:
     """Traduce al ingles los textos de sub-tematica, con cache en disco.
 
     Por que hace falta: Cohere multilingual v3 da similitudes ~0.15 mas bajas
@@ -167,14 +170,16 @@ def translate_texts(llm, texts: list[str], batch_size: int = 15) -> dict[str, st
     sub-tematica se toma la mejor de las dos similitudes (ver
     scripts/analysis/ceplan_units.py). La cache se indexa por el texto en
     espanol: si CEPLAN cambia una sub-tematica, solo esa se retraduce.
+
+    Otros planes (lb_plans) pasan su propia cache y su propio contexto.
     """
     cache = {}
-    if TRANSLATION_CACHE.exists():
-        cache = json.loads(TRANSLATION_CACHE.read_text(encoding="utf-8"))
+    if cache_path.exists():
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
     pending = [t for t in dict.fromkeys(texts) if t not in cache]
     for start in range(0, len(pending), batch_size):
         chunk = pending[start:start + batch_size]
-        raw = llm.complete(_TRANSLATE_SYSTEM, json.dumps(chunk, ensure_ascii=False),
+        raw = llm.complete(system, json.dumps(chunk, ensure_ascii=False),
                            max_tokens=8000)
         raw = raw.strip()
         raw = raw[raw.find("["):raw.rfind("]") + 1]
@@ -182,9 +187,9 @@ def translate_texts(llm, texts: list[str], batch_size: int = 15) -> dict[str, st
         if len(out) != len(chunk):
             raise RuntimeError(f"La traduccion devolvio {len(out)} textos, no {len(chunk)}")
         cache.update(zip(chunk, out))
-        TRANSLATION_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        TRANSLATION_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=1),
-                                     encoding="utf-8")
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1),
+                              encoding="utf-8")
         print(f"  traducidas {min(start + batch_size, len(pending))}/{len(pending)}")
     return {t: cache[t] for t in texts}
 

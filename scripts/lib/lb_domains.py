@@ -6,9 +6,11 @@ proyectos y los de publicaciones no se mezclan ni se comparan entre si. Si en
 algun momento hace falta cruzarlos, tiene que ser un paso explicito y aparte,
 no un efecto lateral de compartir tabla.
 
-Anadir un dataset nuevo = anadir una entrada aqui. El resto del pipeline
-(extraccion, normalizacion, cuantificacion, reportes) no cambia: esa es la
-parte "replicable con otros datasets".
+Anadir un dataset nuevo = un adaptador en scripts/datasets/ que escriba los
+CSV estandar (projects / publications / links / policies), una entrada aqui
+por cada dominio, su plan nacional en lb_plans y el valor del enum en RDS
+(sql/migrations/). El resto del pipeline (extraccion, normalizacion,
+cuantificacion, reportes, cruce con el plan) no cambia.
 """
 
 from __future__ import annotations
@@ -50,6 +52,17 @@ class Domain:
     excluded_columns: dict[str, str] = field(default_factory=dict)
     # Una unidad sin ninguna de estas columnas llena no se procesa.
     required_any: list[str] = field(default_factory=list)
+    # Universo minimo declarado: una fila entra solo si TODAS estas columnas
+    # tienen valor (filter_min_requirements). Vacio = entra todo lo recibido.
+    min_required_all: list[str] = field(default_factory=list)
+
+    # --- A que dataset pertenece y como se nombra --------------------------
+    dataset: str = "pucp"
+    kind: str = "projects"             # "projects" | "publications"
+    short_label: str = ""              # "Proyectos", para titulos de reportes
+    noun: str = ""                     # "proyectos", para frases
+    # Plan nacional contra el que se cruzan las unidades (clave de lb_plans).
+    plan: str = "pedn2050"
 
     # --- Texto auxiliar: filas de otro CSV unidas por clave ----------------
     # Para proyectos, el CSV de origen no trae resumen (el export CRIS solo lo
@@ -111,6 +124,14 @@ DOMAINS: dict[str, Domain] = {
             "research_line_3": "Idem.", "research_line_4": "Idem.", "research_line": "Idem.",
         },
         required_any=["title", "cris_abstract", "cris_keywords"],
+        # 2026-09-29: title + cris_abstract (antes knowledge_area + linea de
+        # investigacion, que dejaba 409). Medido por longitud de texto, los
+        # proyectos que calificaban SOLO por knowledge_area+linea tenian una
+        # mediana de 801 caracteres; los que califican solo por abstract, 1547.
+        # Concluido en CRIS + inicio 2010+ ya viene aplicado en el CSV de origen
+        # (scripts/addons/build_projects_from_cris.py).
+        min_required_all=["title", "cris_abstract"],
+        short_label="Proyectos", noun="proyectos",
         aux_csv=REPO_ROOT / "salidas" / "06_project_results_ground_truth.csv",
         aux_join_column="project_id",
         # Orden deliberado: primero el titulo del resultado, luego el mejor
@@ -143,6 +164,7 @@ DOMAINS: dict[str, Domain] = {
             "WOS": "Idem.",
         },
         required_any=["title", "abstract", "keywords"],
+        kind="publications", short_label="Publicaciones", noun="publicaciones",
     ),
     # Tercer experimento de EXPERIMENTS.md: solo las publicaciones que son
     # resultado declarado de un proyecto del universo. Es el contraparte
@@ -164,6 +186,61 @@ DOMAINS: dict[str, Domain] = {
             "project_id": "Proyecto que declaro el resultado; se guarda para trazar.",
         },
         required_any=["title", "abstract", "keywords"],
+        # 2026-09-30: title + abstract. Se sacaron keywords (llenas en solo
+        # 30.8% de las 1192 candidatas: era el cuello de botella, no una senal
+        # de calidad) y que el proyecto padre tambien calificara (acoplaba este
+        # universo a un criterio de otro dominio sin necesidad).
+        min_required_all=["title", "abstract"],
+        kind="publications", short_label="Publicaciones de proyectos", noun="publicaciones",
+    ),
+
+    # --- ECOTEC (Ecuador) -------------------------------------------------
+    # CSV estandar de scripts/datasets/ecotec.py. El universo es el que entrega
+    # ECOTEC: el pipeline no filtra proyectos (63, todos con descripcion).
+    "ecotec_projects": Domain(
+        key="ecotec_projects",
+        label="Proyectos de investigacion ECOTEC (registro entregado por la universidad)",
+        source_csv=REPO_ROOT / "salidas" / "datasets" / "ecotec" / "projects.csv",
+        id_column="project_id",
+        title_column="title",
+        text_columns=["title", "abstract", "keywords"],
+        metadata_columns=["year", "start_date", "end_date", "research_line"],
+        grouping_column="research_line",
+        knowledge_area_column="research_line",
+        excluded_columns={
+            "amount": "Monto concedido: administrativo, no tematico.",
+            "start_date": "Fecha: se guarda como metadato, no es tematica.",
+            "end_date": "Idem.",
+            "research_line": "Etiqueta corta (5 lineas institucionales, a veces cortada en "
+                             "\"(+1 mas)\"); se muestra como agrupacion, no se embebe.",
+        },
+        required_any=["title", "abstract", "keywords"],
+        dataset="ecotec", short_label="Proyectos", noun="proyectos", plan="pnd_ec_2025",
+    ),
+    # Los articulos llegan solo con titulo; el abstract se recupero por titulo
+    # (OpenAlex / Semantic Scholar / Crossref, verificado por lb_titles). Como
+    # en PUCP, sin abstract no hay texto suficiente para extraer temas: entra
+    # la publicacion con title + abstract (95 de 144 al 2026-10-28).
+    "ecotec_publications": Domain(
+        key="ecotec_publications",
+        label="Articulos de proyectos ECOTEC (declarados por la universidad)",
+        source_csv=REPO_ROOT / "salidas" / "datasets" / "ecotec" / "publications.csv",
+        id_column="publication_id",
+        title_column="title",
+        text_columns=["title", "abstract", "keywords", "journal"],
+        metadata_columns=["year", "doi", "journal", "abstract_source"],
+        grouping_column="journal",
+        excluded_columns={
+            "openalex_keywords": "Generadas por OpenAlex, no por los autores, y a veces "
+                                 "equivocadas (\"travel permits\" en un articulo de learning "
+                                 "analytics). Decision del 2026-10-28.",
+            "doi": "Identificador, sin contenido semantico.",
+            "abstract_source": "Procedencia del abstract: metadato de auditoria.",
+        },
+        required_any=["title", "abstract", "keywords"],
+        min_required_all=["title", "abstract"],
+        dataset="ecotec", kind="publications", short_label="Publicaciones de proyectos",
+        noun="publicaciones", plan="pnd_ec_2025",
     ),
 }
 
@@ -214,55 +291,27 @@ def read_source(domain: Domain) -> list[dict]:
 
 
 def qualifying_project_ids(rows: list[dict] | None = None) -> set[str]:
-    """Universo minimo declarado de PROYECTOS (decision del equipo, no del
-    CSV): concluido en CRIS + inicio 2010+ ya viene aplicado en el CSV de origen
-    (scripts/addons/build_projects_from_cris.py, desde 2026-10-13); a eso se suma
-    title + cris_abstract.
-
-    Antes exigia ademas knowledge_area + linea de investigacion (dejaba 409).
-    Se reemplazo por este criterio mas simple cuando un nuevo export de CRIS
-    (2026-09-29) llevo cris_abstract de 0.9% a 66.3% de los 975 proyectos:
-    medido por longitud de texto, los proyectos que calificaban SOLO por
-    knowledge_area+linea (sin abstract) tenian una mediana de 801 caracteres,
-    y los que calificarian solo por abstract (sin esos tags) tenian 1547 --
-    casi el doble. knowledge_area/linea de investigacion eran la mejor senal
-    disponible de "hay contenido real" cuando el abstract estaba casi vacio;
-    ya no lo son. 646 de 975 proyectos cumplen este criterio hoy.
-    """
+    """project_id de los proyectos PUCP que cumplen el universo minimo
+    declarado (``min_required_all`` del dominio "projects")."""
+    domain = get("projects")
     if rows is None:
-        rows = read_source(get("projects"))
-    return {clean_value(r.get("project_id")) for r in rows
-            if clean_value(r.get("title")) and clean_value(r.get("cris_abstract"))}
+        rows = read_source(domain)
+    kept, _ = filter_min_requirements(domain, rows)
+    return {clean_value(r.get(domain.id_column)) for r in kept}
 
 
 def filter_min_requirements(domain: Domain, rows: list[dict]) -> tuple[list[dict], int]:
-    """Aplica el universo minimo declarado del dominio, si tiene uno.
+    """Aplica el universo minimo declarado del dominio (``min_required_all``).
 
-    Esto es una decision del equipo sobre CALIDAD de dato, separada de
-    ``required_any`` (que solo evita unidades sin texto en absoluto). Un
-    proyecto o publicacion puede tener texto suficiente para `to_units()` y
-    aun asi no cumplir el universo minimo declarado.
+    Esto es una decision sobre CALIDAD de dato, declarada por dominio y
+    separada de ``required_any`` (que solo evita unidades sin texto en
+    absoluto). Un proyecto o publicacion puede tener texto suficiente para
+    `to_units()` y aun asi no cumplir el universo minimo declarado. Los motivos
+    de cada criterio estan junto a su declaracion en DOMAINS.
     """
-    if domain.key == "projects":
-        keep = qualifying_project_ids(rows)
-        kept = [r for r in rows if clean_value(r.get("project_id")) in keep]
-    elif domain.key == "publications_linked":
-        # Universo minimo: title + abstract, aplicado directo sobre las 1192
-        # publicaciones declaradas como resultado de un proyecto del universo.
-        # Antes exigia ademas keywords (dejaba 308/300) y que el proyecto
-        # padre TAMBIEN calificara bajo el criterio de projects -- se saco esa
-        # segunda exigencia: la pregunta aqui es "esta publicacion tiene
-        # suficiente texto propio", no "el proyecto que la declaro tambien
-        # califica" (eso acoplaba el universo de publicaciones a un criterio
-        # de otro dominio, sin necesidad). keywords se saco por el mismo
-        # razonamiento que en projects: de las 1192 filas candidatas, keywords
-        # estaba lleno en solo 30.8% (title 71.3%, abstract 45.1%) -- era el
-        # cuello de botella real, no una senal de calidad adicional.
-        # 538 filas (529 tras deduplicar) cumplen title+abstract hoy.
-        kept = [r for r in rows
-                if clean_value(r.get("title")) and clean_value(r.get("abstract"))]
-    else:
+    if not domain.min_required_all:
         return rows, 0
+    kept = [r for r in rows if all(clean_value(r.get(c)) for c in domain.min_required_all)]
     return kept, len(rows) - len(kept)
 
 

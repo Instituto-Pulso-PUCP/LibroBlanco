@@ -8,9 +8,10 @@ cuánto de cada tema lo aporta cada unidad.
 independientes.** No se mezclan ni se comparan. Para procesar los dos, se corre
 el pipeline dos veces.
 
-El contraste contra planes nacionales / políticas **está pausado** y no forma
-parte de este flujo; ver el aviso en
-[`docs/topic_normalization_pipeline.md`](../../docs/topic_normalization_pipeline.md).
+El cruce con el plan nacional de cada dataset (PEDN 2050 para PUCP, PND
+2025-2029 para ECOTEC) va aparte, después de la etapa 05:
+[`scripts/analysis/ceplan_units.py`](../analysis/ceplan_units.py), con los
+planes en [`scripts/lib/lb_plans.py`](../lib/lb_plans.py).
 
 ## Uso
 
@@ -71,7 +72,9 @@ Qué falta rellenar hoy: [`docs/infraestructura_aws.md`](../../docs/infraestruct
 
 ## Añadir otro dataset
 
-Una entrada en `DOMAINS` de [`scripts/lib/lb_domains.py`](../lib/lb_domains.py)
-—CSV de origen, columna de id, columnas de texto, columnas excluidas con su
-motivo— y el resto del pipeline funciona sin cambios. El reporte de insumos y
+Un adaptador que escriba los CSV estándar y una entrada en `DOMAINS` de
+[`scripts/lib/lb_domains.py`](../lib/lb_domains.py) —CSV de origen, columna de
+id, columnas de texto, columnas excluidas con su motivo, plan nacional— y el
+resto del pipeline funciona sin cambios. Pasos completos:
+[`scripts/datasets/README.md`](../datasets/README.md). El reporte de insumos y
 el de consumo permiten comparar la corrida nueva contra las anteriores.

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Cruce unidad (proyecto / publicacion) <-> sub-tematica del PEDN 2050.
+"""Cruce unidad (proyecto / publicacion) <-> hoja de un plan nacional.
+
+Nacio para el PEDN 2050 / CEPLAN (sub-tematicas); ahora el plan sale del
+dominio (lb_domains.Domain.plan -> lb_plans): PUCP contra el PEDN 2050,
+ECOTEC contra las politicas del PND 2025-2029. Abajo "sub-tematica" se lee
+como "hoja del plan".
 
 Responde, por dominio, las dos preguntas del encargo:
   - "¿que sub-tematicas CEPLAN desarrolla este proyecto?"  (hasta 5, con piso)
@@ -29,15 +34,21 @@ Metodo (ver EXPERIMENTS.md §6 y docs/cuantificacion_temas.md §8):
      sub-tematica?") usa todos los vinculos confirmados, o un proyecto con
      seis sub-tematicas claras perderia la sexta en la cobertura.
 
-Salidas en salidas/topics/<dominio>/<run>/: 07_ceplan_units.json,
-ceplan_por_unidad.csv, ceplan_por_subtematica.csv, reporte_ceplan_unidades.md;
-y la cobertura cruzada de ambos dominios en
-salidas/topics/ceplan/reporte_cobertura.md.
+Salidas en salidas/topics/<dominio>/<run>/, con el prefijo del plan
+(PEDN: "ceplan", PND: "pnd"): 07_<prefijo>_units.json, <prefijo>_por_unidad.csv,
+<prefijo>_por_<hoja>.csv, reporte_<prefijo>_unidades.md; y la cobertura
+cruzada de los dominios en <plan.cache_dir>/reporte_cobertura.md
+(PEDN: salidas/topics/ceplan/).
+
+Parametros: seccion [ceplan] de config/pipeline.toml, sobrescribible por plan
+en [plans.<clave>] (p.ej. plans.pnd_ec_2025.developed_min_grade2).
 
     source config/env.sh
     python scripts/analysis/ceplan_units.py \\
         --run projects=full-proj-646 --run publications_linked=publications_linked-529
     python scripts/analysis/ceplan_units.py --run projects=full-proj-646 --dry-run
+    python scripts/analysis/ceplan_units.py \\
+        --run ecotec_projects=<run> --run ecotec_publications=<run>
 """
 from __future__ import annotations
 
@@ -60,13 +71,19 @@ import lb_aws         # noqa: E402
 import lb_ceplan      # noqa: E402
 import lb_cluster     # noqa: E402
 import lb_config      # noqa: E402
+import lb_domains     # noqa: E402
 import lb_membership  # noqa: E402
+import lb_plans       # noqa: E402
 import lb_store       # noqa: E402
-from ceplan_judge_benchmark import MAX_TEXT_CHARS, PRICES, SYSTEM, parse_grades  # noqa: E402
+from ceplan_judge_benchmark import MAX_TEXT_CHARS, PRICES, parse_grades  # noqa: E402
 
-NAMES = {"projects": "Proyectos", "publications_linked": "Publicaciones de proyectos"}
-NOUN = {"projects": "proyectos", "publications_linked": "publicaciones"}
-CEPLAN_DIR = ROOT / "salidas" / "topics" / "ceplan"
+
+def domain_name(domain):
+    return lb_domains.get(domain).short_label or domain
+
+
+def domain_noun(domain):
+    return lb_domains.get(domain).noun or domain
 
 DEFAULTS = {
     "floor": 0.40,
@@ -96,8 +113,9 @@ PRICE_KEY = {"us.meta.llama4-maverick-17b-instruct-v1:0": "llama4_maverick",
              "qwen.qwen3-32b-v1:0": "qwen3_32b"}
 
 
-def params_from(cfg, args):
-    p = {k: cfg.get(f"ceplan.{k}", v) for k, v in DEFAULTS.items()}
+def params_from(cfg, args, plan):
+    p = {k: cfg.get(f"plans.{plan.key}.{k}", cfg.get(f"ceplan.{k}", v))
+         for k, v in DEFAULTS.items()}
     if args.model:
         p["judge_model_id"] = args.model
     p["floor"] = float(p["floor"])
@@ -110,19 +128,16 @@ def params_from(cfg, args):
 # Taxonomia
 # --------------------------------------------------------------------------
 
-def load_taxonomy(cfg):
-    """Sub-tematicas con sus embeddings en espanol e ingles (normalizados)."""
-    tax = lb_ceplan.build_taxonomy()
-    subs = []
-    for on_id, on in tax["on"].items():
-        for tema, tnode in on["temas"].items():
-            for sub_id, sub in tnode["subtemas"].items():
-                subs.append({"id": sub_id, "label": sub["label"], "tema": tema,
-                             "on": on_id, "on_label": on["label"], "text": sub["text"]})
+def load_taxonomy(cfg, plan):
+    """Hojas del plan con sus embeddings en espanol e ingles (normalizados)."""
+    subs = plan.load()
     texts_es = [s["text"] for s in subs]
     # La traduccion esta en cache desde la calibracion; solo llama al LLM si
-    # CEPLAN cambio alguna sub-tematica.
-    translations = lb_ceplan.translate_texts(lb_aws.llm_client(cfg), texts_es)
+    # el plan cambio alguna hoja.
+    translations = lb_ceplan.translate_texts(
+        lb_aws.llm_client(cfg), texts_es,
+        cache_path=plan.cache_dir / f"{plan.leaf_slug}s_en.json",
+        system=plan.translate_system)
     # Cache en disco: Cohere no devuelve exactamente el mismo vector en cada
     # llamada, y una diferencia minima cambia las candidatas que rozan el piso
     # o el tope (y con ellas el cache del LLM). Se invalida si cambia el
@@ -130,7 +145,7 @@ def load_taxonomy(cfg):
     model_id = cfg.get("bedrock.embedding_model_id")
     texts_en = [translations[t] for t in texts_es]
     digest = hashlib.sha256(json.dumps([model_id, texts_es, texts_en]).encode()).hexdigest()[:16]
-    cache = CEPLAN_DIR / "subtematicas_emb.npz"
+    cache = plan.cache_dir / f"{plan.leaf_slug}s_emb.npz"
     if cache.exists():
         stored = np.load(cache)
         if str(stored["digest"]) == digest:
@@ -138,7 +153,7 @@ def load_taxonomy(cfg):
     embedder = lb_aws.embedding_client(cfg)
     es = lb_cluster.normalize_rows(embedder.embed(texts_es))
     en = lb_cluster.normalize_rows(embedder.embed(texts_en))
-    CEPLAN_DIR.mkdir(parents=True, exist_ok=True)
+    plan.cache_dir.mkdir(parents=True, exist_ok=True)
     np.savez(cache, es=es, en=en, digest=np.array(digest))
     return subs, es, en
 
@@ -147,17 +162,18 @@ def load_taxonomy(cfg):
 # Verificacion por LLM (con cache)
 # --------------------------------------------------------------------------
 
-def build_user(text, cands, subs):
-    lines = [f"{n + 1}. {subs[j]['label']} (tematica: {subs[j]['tema']}; "
+def build_user(text, cands, subs, plan):
+    lines = [f"{n + 1}. {subs[j]['label']} ({plan.judge_level2_tag}: {subs[j]['tema']}; "
              f"{subs[j]['on_label'][:60]})" for n, (j, _sim) in enumerate(cands)]
-    return f"INVESTIGACION:\n{text[:MAX_TEXT_CHARS]}\n\nSUB-TEMATICAS:\n" + "\n".join(lines)
+    return (f"INVESTIGACION:\n{text[:MAX_TEXT_CHARS]}\n\n{plan.judge_header}:\n"
+            + "\n".join(lines))
 
 
-def cache_key(model_id, user):
-    return hashlib.sha256(f"{model_id}\n{SYSTEM}\n{user}".encode()).hexdigest()[:24]
+def cache_key(model_id, system, user):
+    return hashlib.sha256(f"{model_id}\n{system}\n{user}".encode()).hexdigest()[:24]
 
 
-def judge_units(cfg, params, jobs, cache_path):
+def judge_units(cfg, params, plan, jobs, cache_path):
     """jobs: [(unit_id, user_prompt, sub_ids candidatas en orden)]. Devuelve {unit_id: grados|None}
     y el uso de tokens de las llamadas nuevas."""
     cache = {}
@@ -173,13 +189,13 @@ def judge_units(cfg, params, jobs, cache_path):
     def work(job):
         unit_id, user, sub_ids = job
         n = len(sub_ids)
-        key = cache_key(model_id, user)
+        key = cache_key(model_id, plan.judge_system, user)
         if key in cache and cache[key]["grades"] is not None:
             return unit_id, cache[key]["grades"]
         client = lb_aws.BedrockClient(cfg)
         grades, raw, used = None, "", {"input_tokens": 0, "output_tokens": 0}
         for _attempt in range(2):  # un reintento si la respuesta no se pudo leer
-            raw = client.converse(SYSTEM, user, model_id=model_id, max_tokens=2048)
+            raw = client.converse(plan.judge_system, user, model_id=model_id, max_tokens=2048)
             used["input_tokens"] += client.last_usage["input_tokens"]
             used["output_tokens"] += client.last_usage["output_tokens"]
             grades = parse_grades(raw, n)
@@ -208,7 +224,7 @@ def judge_units(cfg, params, jobs, cache_path):
 # Un dominio
 # --------------------------------------------------------------------------
 
-def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
+def run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, dry_run):
     store = lb_store.open_store(cfg, domain, run_id)
     units = {u["unit_id"]: u for u in store.read_units()}
     emb = store.read_unit_embeddings()
@@ -263,10 +279,12 @@ def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
 
     out_dir = ROOT / "salidas" / "topics" / domain / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    jobs = [(u, build_user(units[u]["text"], candidates[u], subs),
+    prefix = plan.file_prefix
+    jobs = [(u, build_user(units[u]["text"], candidates[u], subs, plan),
              [subs[j]["id"] for j, _s in candidates[u]])
             for u in ids if candidates[u]]
-    grades, usage = judge_units(cfg, params, jobs, out_dir / "07_ceplan_judge_cache.jsonl")
+    grades, usage = judge_units(cfg, params, plan, jobs,
+                                out_dir / f"07_{prefix}_judge_cache.jsonl")
     failed = sorted(u for u, g in grades.items() if g is None)
     price = PRICES.get(PRICE_KEY.get(params["judge_model_id"], ""), (0.0, 0.0))
     usage["usd"] = (usage["input_tokens"] * price[0] + usage["output_tokens"] * price[1]) / 1e6
@@ -345,6 +363,10 @@ def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
     partition = result.partition_metrics
     payload = {
         "domain": domain, "run": run_id, "params": params, "usage": usage,
+        # Las claves de abajo (on, tema, subtematicas...) conservan los nombres
+        # de CEPLAN para cualquier plan; "plan" dice como se llaman de verdad.
+        "plan": {"key": plan.key, "name": plan.name, "leaf": plan.leaf, "leaves": plan.leaves,
+                 "level1": plan.level1, "level1_long": plan.level1_long, "level2": plan.level2},
         "num_units": len(ids),
         "status_counts": {s: sum(1 for v in status.values() if v == s)
                           for s in ("alineada", "rechazadas_por_llm", "sin_candidatas",
@@ -365,12 +387,13 @@ def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
                   for u in ids},
         "subtematicas": per_sub,
     }
-    (out_dir / "07_ceplan_units.json").write_text(
+    (out_dir / f"07_{prefix}_units.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    with (out_dir / "ceplan_por_unidad.csv").open("w", encoding="utf-8-sig", newline="") as h:
+    col_l1, col_l2, col_leaf = plan.csv_columns
+    with (out_dir / f"{prefix}_por_unidad.csv").open("w", encoding="utf-8-sig", newline="") as h:
         w = csv.writer(h)
-        w.writerow(["unit_id", "titulo", "estado", "rango", "sub_tematica", "tematica", "on",
+        w.writerow(["unit_id", "titulo", "estado", "rango", col_leaf, col_l2, col_l1,
                     "grado", "similitud", "contencion", "contribucion"])
         for u in ids:
             rows = [r for r in per_unit.get(u, []) if r["top"]] or [None]
@@ -382,9 +405,10 @@ def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
                 w.writerow([u, units[u].get("title", ""), status[u], n, s["label"], s["tema"], s["on"],
                             r["grade"], f"{r['sim']:.4f}", f"{r['containment']:.4f}",
                             f"{r['contribution']:.5f}"])
-    with (out_dir / "ceplan_por_subtematica.csv").open("w", encoding="utf-8-sig", newline="") as h:
+    with (out_dir / f"{prefix}_por_{plan.leaf_slug}.csv").open("w", encoding="utf-8-sig",
+                                                                newline="") as h:
         w = csv.writer(h)
-        w.writerow(["on", "tematica", "sub_tematica", "cobertura", "num_unidades", "num_grado2",
+        w.writerow([col_l1, col_l2, col_leaf, "cobertura", "num_unidades", "num_grado2",
                     "unidades_equivalentes", "unit_id", "titulo", "grado", "contribucion"])
         for sid, v in per_sub.items():
             rows = v["units"] or [None]
@@ -396,14 +420,15 @@ def run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, dry_run):
                 else:
                     w.writerow(base + [r["unit_id"], units[r["unit_id"]].get("title", ""),
                                        r["grade"], f"{r['contribution']:.5f}"])
-    write_domain_report(out_dir, payload, subs)
-    print(f"  -> {out_dir.relative_to(ROOT)}/07_ceplan_units.json, ceplan_por_unidad.csv, "
-          "ceplan_por_subtematica.csv, reporte_ceplan_unidades.md")
+    write_domain_report(out_dir, payload, subs, plan)
+    print(f"  -> {out_dir.relative_to(ROOT)}/07_{prefix}_units.json, {prefix}_por_unidad.csv, "
+          f"{prefix}_por_{plan.leaf_slug}.csv, reporte_{prefix}_unidades.md")
     return payload
 
 
-def write_domain_report(out_dir, p, subs):
-    domain, noun = p["domain"], NOUN[p["domain"]]
+def write_domain_report(out_dir, p, subs, plan):
+    domain, noun = p["domain"], domain_noun(p["domain"])
+    leaf, leaves = plan.leaf, plan.leaves
     sc = p["status_counts"]
     n = p["num_units"]
     covs = {c: [v for v in p["subtematicas"].values() if v["coverage"] == c]
@@ -411,58 +436,60 @@ def write_domain_report(out_dir, p, subs):
     total_eq = sum(p["by_on"].values()) or 1.0
     pr = p["params"]
     lines = [
-        f"# Sub-temáticas del PEDN 2050 por unidad — {NAMES[domain]}", "",
-        f"Corrida `{p['run']}` · {n} {noun} · {len(subs)} sub-temáticas (`Líneas de Inv.`). "
+        f"# {leaves.capitalize()} del {plan.name} por unidad — {domain_name(domain)}", "",
+        f"Corrida `{p['run']}` · {n} {noun} · {len(subs)} {leaves} ({plan.source_note}). "
         f"Candidatas por embeddings (piso {pr['floor']}, hasta {pr['max_candidates']} por unidad "
-        f"más las {pr['reverse_top_m']} unidades más cercanas a cada sub-temática, "
+        f"más las {pr['reverse_top_m']} unidades más cercanas a cada {leaf}, "
         f"máx(es, en)); verificadas por `{pr['judge_model_id']}` con grado 0/1/2; se conservan las "
         f"de grado ≥ 1 (en el listado por unidad, las {pr['top_n']} con mayor contención). Método y elección del modelo: "
         "EXPERIMENTS.md §6.", "",
         "## Unidades", "",
-        f"- Con al menos una sub-temática confirmada: **{sc['alineada']}** ({sc['alineada'] / n:.0%})",
+        f"- Con al menos una {leaf} confirmada: **{sc['alineada']}** ({sc['alineada'] / n:.0%})",
         f"- Con candidatas pero todas rechazadas por el LLM: {sc['rechazadas_por_llm']}",
         f"- Sin ninguna candidata sobre el piso: {sc['sin_candidatas']}",
         f"- Verificación fallida (respuesta ilegible): {sc['verificacion_fallida']}",
         f"- Vínculos: {p['links_total']} ({p['links_by_grade'][2]} de grado 2, "
         f"{p['links_by_grade'][1]} de grado 1) de {p['candidates_total']} candidatas; "
-        f"sub-temáticas efectivas por unidad (media): {p['mean_effective_subs_per_unit']:.2f}",
+        f"{leaves} efectivas por unidad (media): {p['mean_effective_subs_per_unit']:.2f}",
         f"- Costo de la verificación en esta ejecución: ~USD {p['usage']['usd']:.3f} "
         f"({p['usage']['calls']} llamadas nuevas)", "",
-        "## Reparto por Objetivo Nacional (unidades-equivalentes)", "",
-        "| ON | Unidades-equivalentes | % de lo alineado |", "|---|---:|---:|"]
+        f"## Reparto por {plan.level1_long} (unidades-equivalentes)", "",
+        f"| {plan.level1} | Unidades-equivalentes | % de lo alineado |", "|---|---:|---:|"]
     for on, eq in p["by_on"].items():
         lines.append(f"| {p['on_labels'][on][:90]} | {eq:.1f} | {eq / total_eq:.1%} |")
     k = pr["developed_min_grade2"]
-    lines += ["", "## Cobertura de las sub-temáticas", "",
+    head = f"| {plan.level1} | {plan.level2} | {leaf.capitalize()} |"
+    lines += ["", f"## Cobertura de las {leaves}", "",
               "Se cuenta solo con vínculos de grado 2 (relación clara); los tangenciales se "
               "listan pero no cierran un hueco.", "",
               f"- Desarrolladas (≥ {k} unidades de grado 2): **{len(covs['desarrollada'])}**",
               f"- Débiles (1 a {k - 1} de grado 2): {len(covs['debil'])}",
               f"- **Sin desarrollo (ninguna de grado 2): {len(covs['sin_desarrollo'])}**", "",
               "### Sin desarrollo", "",
-              "| ON | Temática | Sub-temática | vínculos tangenciales |", "|---|---|---|---:|"]
+              f"{head} vínculos tangenciales |", "|---|---|---|---:|"]
     for v in sorted(covs["sin_desarrollo"], key=lambda v: (v["on"], v["tema"])):
         lines.append(f"| {v['on']} | {v['tema']} | **{v['label']}** | {v['num_units']} |")
-    lines += ["", "### Débiles", "", "| ON | Temática | Sub-temática | unidades | de grado 2 |",
+    lines += ["", "### Débiles", "", f"{head} unidades | de grado 2 |",
               "|---|---|---|---:|---:|"]
     for v in sorted(covs["debil"], key=lambda v: (v["on"], v["tema"])):
         lines.append(f"| {v['on']} | {v['tema']} | {v['label']} | {v['num_units']} | {v['num_grade2']} |")
     lines += ["", "### Las 15 más desarrolladas", "",
-              "| Sub-temática | ON | unidades | de grado 2 | unidades-equivalentes |",
+              f"| {leaf.capitalize()} | {plan.level1} | unidades | de grado 2 | unidades-equivalentes |",
               "|---|---|---:|---:|---:|"]
     for v in sorted(p["subtematicas"].values(), key=lambda v: -v["units_equivalent"])[:15]:
         lines.append(f"| {v['label']} | {v['on']} | {v['num_units']} | {v['num_grade2']} | "
                      f"{v['units_equivalent']:.1f} |")
     lines += ["", "Precisión de los vínculos: **pendiente** de la validación sobre una muestra "
               "de la salida real (EXPERIMENTS.md §6.4). No reportar como exacta antes de eso.", ""]
-    (out_dir / "reporte_ceplan_unidades.md").write_text("\n".join(lines), encoding="utf-8")
+    (out_dir / f"reporte_{plan.file_prefix}_unidades.md").write_text("\n".join(lines),
+                                                                      encoding="utf-8")
 
 
-def write_cross_report(payloads, subs):
-    """Cobertura conjunta: que sub-tematicas no desarrolla ningun dominio."""
-    lines = ["# Cobertura de las sub-temáticas del PEDN 2050 — proyectos y publicaciones", "",
-             "| ON | Temática | Sub-temática | " +
-             " | ".join(f"{NOUN[p['domain']]} (grado 2)" for p in payloads) + " |",
+def write_cross_report(payloads, subs, plan):
+    """Cobertura conjunta: que hojas del plan no desarrolla ningun dominio."""
+    lines = [f"# Cobertura de las {plan.leaves} del {plan.name} — proyectos y publicaciones", "",
+             f"| {plan.level1} | {plan.level2} | {plan.leaf.capitalize()} | " +
+             " | ".join(f"{domain_noun(p['domain'])} (grado 2)" for p in payloads) + " |",
              "|---|---|---|" + "---:|" * len(payloads)]
     nobody = []
     for s in sorted(subs, key=lambda s: (s["on"], s["tema"], s["label"])):
@@ -476,13 +503,14 @@ def write_cross_report(payloads, subs):
             nobody.append(s)
         lines.append(f"| {s['on']} | {s['tema']} | {s['label']} | " + " | ".join(cells) + " |")
     head = ["", "Celdas: unidades vinculadas (de ellas, con relación clara, grado 2).", "",
-            f"**Sub-temáticas sin ninguna unidad de grado 2 en ningún dominio: {len(nobody)}**", ""]
+            f"**{plan.leaves.capitalize()} sin ninguna unidad de grado 2 en ningún dominio: "
+            f"{len(nobody)}**", ""]
     head += [f"- {s['on']} · {s['tema']} · {s['label']}" for s in nobody] + [""]
     lines[2:2] = head
-    CEPLAN_DIR.mkdir(parents=True, exist_ok=True)
-    (CEPLAN_DIR / "reporte_cobertura.md").write_text("\n".join(lines), encoding="utf-8")
-    print(f"\n-> {(CEPLAN_DIR / 'reporte_cobertura.md').relative_to(ROOT)} "
-          f"({len(nobody)} sub-temáticas sin ninguna unidad de grado 2)")
+    plan.cache_dir.mkdir(parents=True, exist_ok=True)
+    (plan.cache_dir / "reporte_cobertura.md").write_text("\n".join(lines), encoding="utf-8")
+    print(f"\n-> {(plan.cache_dir / 'reporte_cobertura.md').relative_to(ROOT)} "
+          f"({len(nobody)} {plan.leaves} sin ninguna unidad de grado 2)")
 
 
 def main():
@@ -494,21 +522,27 @@ def main():
                         help="Solo cuenta candidatas; no llama al LLM ni escribe nada.")
     args = parser.parse_args()
 
+    runs = [pair.partition("=")[::2] for pair in args.run]
+    plan_keys = {lb_domains.get(domain).plan for domain, _run in runs}
+    if len(plan_keys) != 1:
+        raise SystemExit(f"Los dominios de --run se cruzan con planes distintos ({sorted(plan_keys)}); "
+                         "correr una vez por plan.")
+    plan = lb_plans.get(plan_keys.pop())
+
     cfg = lb_config.load()
-    params = params_from(cfg, args)
-    print(f"Verificador: {params['judge_model_id']} · piso {params['floor']} · "
+    params = params_from(cfg, args, plan)
+    print(f"Plan: {plan.name} · verificador: {params['judge_model_id']} · piso {params['floor']} · "
           f"hasta {params['max_candidates']} candidatas · top {params['top_n']}")
-    subs, emb_es, emb_en = load_taxonomy(cfg)
-    print(f"Taxonomía: {len(subs)} sub-temáticas embebidas (es + en)")
+    subs, emb_es, emb_en = load_taxonomy(cfg, plan)
+    print(f"Taxonomía: {len(subs)} {plan.leaves} embebidas (es + en)")
     payloads = []
-    for pair in args.run:
-        domain, _, run_id = pair.partition("=")
-        print(f"\n=== {NAMES.get(domain, domain)} ({run_id}) ===")
-        p = run_domain(cfg, params, domain, run_id, subs, emb_es, emb_en, args.dry_run)
+    for domain, run_id in runs:
+        print(f"\n=== {domain_name(domain)} ({run_id}) ===")
+        p = run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, args.dry_run)
         if p:
             payloads.append(p)
     if len(payloads) > 1:
-        write_cross_report(payloads, subs)
+        write_cross_report(payloads, subs, plan)
 
 
 if __name__ == "__main__":

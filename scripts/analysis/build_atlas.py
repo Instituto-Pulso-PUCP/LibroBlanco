@@ -29,6 +29,7 @@ import lb_config     # noqa: E402
 import lb_coverage   # noqa: E402
 import lb_domains    # noqa: E402
 import lb_membership # noqa: E402
+import lb_plans      # noqa: E402
 import lb_store      # noqa: E402
 
 TEMPLATE = Path(__file__).resolve().parent / "templates" / "atlas_template.html"
@@ -157,7 +158,8 @@ def ceplan_block(domain: str, run_id: str) -> dict | None:
     ``units[uid] = [[sid, grado, contencion, contribucion], ...]`` con todos
     los vinculos confirmados ordenados por contencion; ``top`` dice cuantos se
     listan por unidad."""
-    path = ROOT / "salidas" / "topics" / domain / run_id / "07_ceplan_units.json"
+    prefix = lb_plans.get(lb_domains.get(domain).plan).file_prefix
+    path = ROOT / "salidas" / "topics" / domain / run_id / f"07_{prefix}_units.json"
     if not path.exists():
         return None
     p = json.loads(path.read_text(encoding="utf-8"))

@@ -15,7 +15,10 @@ SET search_path TO libroblanco, public;
 -- tenga rds_superuser.
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TYPE lb_domain AS ENUM ('projects', 'publications', 'publications_linked');
+-- Un valor por dominio de lb_domains.DOMAINS. Para agregar uno a una base ya
+-- creada, no re-aplicar este archivo: ver sql/migrations/.
+CREATE TYPE lb_domain AS ENUM ('projects', 'publications', 'publications_linked',
+                               'ecotec_projects', 'ecotec_publications');
 
 -- ---------------------------------------------------------------------------
 -- Trazabilidad de corridas
