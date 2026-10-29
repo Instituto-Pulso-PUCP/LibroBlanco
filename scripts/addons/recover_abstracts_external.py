@@ -164,20 +164,39 @@ def candidates():
     return out
 
 
+def candidates_from_publications(path):
+    """Candidatas desde un publications.csv estandar (salida de un adaptador
+    de scripts/datasets/): toda fila con titulo y sin abstract util."""
+    out = []
+    for n in csv.DictReader(open(path, encoding="utf-8-sig")):
+        title = (n.get("title") or "").strip()
+        if not title or len((n.get("abstract") or "").strip()) >= MIN_CHARS:
+            continue
+        doi = clean(n.get("doi"))
+        out.append({"publication_id": n["publication_id"], "group": "doi" if doi else "titulo",
+                    "title": title, "query": paper_title(title), "doi": doi, "isbn": "",
+                    "type": "", "has_kw": bool(clean(n.get("keywords")))})
+    return out
+
+
 def main():
     global OUT, LINKED
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--linked", type=Path, default=LINKED,
                         help="Salida de rebuild_linked_publications.py (mismo orden que el ground truth).")
+    parser.add_argument("--publications", type=Path,
+                        help="publications.csv estandar de otro dataset (scripts/datasets/); "
+                             "reemplaza a --linked y al ground truth de PUCP.")
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
     OUT, LINKED = args.out, args.linked
     OUT.parent.mkdir(parents=True, exist_ok=True)
     done = set()
     if OUT.exists():
-        done = {json.loads(l)["publication_id"] for l in OUT.open()}
-    cands = [c for c in candidates() if c["publication_id"] not in done]
+        done = {json.loads(l)["publication_id"] for l in OUT.open(encoding="utf-8")}
+    pool = candidates_from_publications(args.publications) if args.publications else candidates()
+    cands = [c for c in pool if c["publication_id"] not in done]
     print(f"{len(cands)} por buscar ({len(done)} ya hechas)", flush=True)
     for n, c in enumerate(cands, 1):
         hit, sim, tried = None, 0.0, []
@@ -214,7 +233,7 @@ def main():
         rec = dict(c, found=bool(hit), source=hit["source"] if hit else "", sim=round(sim, 3),
                    matched_title=hit["title"] if hit else "", abstract=hit["abstract"] if hit else "",
                    tried=tried)
-        with OUT.open("a") as f:
+        with OUT.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         if n % 25 == 0:
             print(f"  {n}/{len(cands)}", flush=True)
