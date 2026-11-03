@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
 """Genera el Atlas Temático: explorador HTML de la cuantificacion bidireccional.
 
-Lee los resultados de RDS (o del store local) y los incrusta en
-`templates/atlas_template.html`. Para cambiar el diseño o los textos, editar
-esa plantilla y volver a correr esto: el HTML publicado es una salida, no una
-fuente que haya que editar a mano.
+Lee los resultados de RDS (o del store local) de las corridas de UN dataset
+y los escribe como un archivo de datos que carga `templates/atlas_template.html`.
+Para cambiar el diseño o el texto comun, editar esa plantilla; el texto propio
+de cada dataset (institucion, universos, plan nacional) esta en
+atlas_profiles.py. El HTML publicado es una salida, no una fuente que haya que
+editar a mano.
 
     python scripts/analysis/build_atlas.py \
-        --run projects=full-proj-975 \
-        --run publications_linked=publications_linked-20260924-002153
+        --run projects=full-proj-20261018 \
+        --run publications_linked=publications_linked-20261018
+    python scripts/analysis/build_atlas.py \
+        --run ecotec_projects=ecotec-proj-20261028 \
+        --run ecotec_publications=ecotec-pubs-20261028
 
-Salida: salidas/topics/atlas.html
+El dataset sale de los dominios (lb_domains.Domain.dataset). Salidas:
+
+    salidas/topics/atlas/index.html        la pagina, con selector de dataset
+    salidas/topics/atlas/datasets.json     que datasets hay (se actualiza, no se pisa)
+    salidas/topics/atlas/data/<id>.json    numeros y textos de un dataset
+    salidas/topics/atlas_<id>.html         archivo unico con ese dataset incrustado,
+                                           para abrir sin servidor (sin selector)
+
+Publicar la carpeta: index.html como pagina y el resto como `files`. Abierta
+desde el disco, el navegador no deja que index.html lea data/: usar el
+archivo unico o `python -m http.server` en la carpeta.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import datetime
 import json
 import sys
 from pathlib import Path
@@ -32,8 +48,10 @@ import lb_membership # noqa: E402
 import lb_plans      # noqa: E402
 import lb_store      # noqa: E402
 
+import atlas_profiles  # noqa: E402
+
 TEMPLATE = Path(__file__).resolve().parent / "templates" / "atlas_template.html"
-DEFAULT_OUT = ROOT / "salidas" / "topics" / "atlas.html"
+DEFAULT_OUT_DIR = ROOT / "salidas" / "topics" / "atlas"
 
 
 def decompose(cfg, store, unit_id, topics):
@@ -149,10 +167,10 @@ def examples(cfg, store, rows, topics, units, raw_topics):
 
 
 def ceplan_block(domain: str, run_id: str) -> dict | None:
-    """Cruce unidad <-> sub-tematica del PEDN 2050 (scripts/analysis/ceplan_units.py),
-    si ya se corrio para este run. Sin ese archivo la pestaña de Objetivos
-    Nacionales muestra un aviso en vez de romperse: el cruce es aparte, no una
-    etapa obligatoria del pipeline.
+    """Cruce unidad <-> hoja del plan nacional del dominio
+    (scripts/analysis/ceplan_units.py), si ya se corrio para este run. Sin ese
+    archivo la pestaña del plan muestra un aviso en vez de romperse: el cruce es
+    aparte, no una etapa obligatoria del pipeline.
 
     Formato compacto: ``subs[sid] = {l, t, o, cov, n, n2, eq}`` y
     ``units[uid] = [[sid, grado, contencion, contribucion], ...]`` con todos
@@ -177,7 +195,9 @@ def ceplan_block(domain: str, run_id: str) -> dict | None:
     return {"subs": subs, "units": units, "status": status, "on": p["on_labels"],
             "byOn": {k: round(v, 2) for k, v in p["by_on"].items()},
             "sc": p["status_counts"], "links": p["links_by_grade"],
-            "top": pr["top_n"], "model": pr["judge_model_id"], "floor": pr["floor"],
+            "top": pr["top_n"], "model": pr["judge_model_id"],
+            "judge": atlas_profiles.MODEL_NAMES.get(pr["judge_model_id"], pr["judge_model_id"]),
+            "floor": pr["floor"],
             "minG2": pr["developed_min_grade2"]}
 
 
@@ -226,7 +246,8 @@ def collect(cfg, domain: str, run_id: str) -> dict:
         units[u["unit_id"]] = {"t": (u.get("title") or "")[:170],
                                "g": (u.get("grouping") or "")[:60],
                                "y": u.get("year")}
-    if domain.startswith("publications"):
+    spec = lb_domains.get(domain)
+    if spec.dataset == "pucp" and spec.kind == "publications":
         years = publication_years()
         for uid, u in units.items():
             if not u["y"]:
@@ -306,29 +327,31 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
             "units": report["units_built"], "dropped": report["units_dropped"],
             "chars": report["text_chars"], "cols": cols, "req": spec.required_any,
             "raw_rows": len(raw_rows), "dropped_min_req": dropped_min_req,
-            "prov": provenance_counts(domain, len(raw_rows), len(rows), len(units))}
+            # Embudo de «Datos de origen», contado sobre la corrida que se
+            # muestra para que no quede desactualizado cuando cambia el
+            # universo (p.ej. 2026-10-11: 646 -> 653 proyectos).
+            "prov": atlas_profiles.provenance(spec.dataset, domain, raw_rows, rows, len(units))}
 
 
-def provenance_counts(domain: str, n_source: int, n_qualified: int, n_units: int) -> dict:
-    """Conteos del embudo hasta la poblacion final, para la pestaña «Datos de
-    origen». Salen de la corrida que se muestra, para que no queden
-    desactualizados cuando cambia el universo (p.ej. 2026-10-11: 646 -> 653
-    proyectos, 529 -> 462 publicaciones). Los textos de cada paso y la
-    explicacion estan en la plantilla (PROCEDENCIA)."""
-    if domain == "projects":
-        # Desde 2026-10-13 el universo parte de las filas de Proyectos CRIS
-        # (scripts/addons/build_projects_from_cris.py), no de la hoja de PULSO.
-        cris_files = sorted((ROOT / "datos").glob("ProyectosPUCPCRIS*.csv"))
-        n_cris = None
-        if cris_files:
-            with cris_files[-1].open(encoding="utf-8-sig", newline="") as fh:
-                csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
-                n_cris = sum(1 for _ in csv.DictReader(fh))
-        return {"cris": n_cris or 1891, "cris_file": cris_files[-1].stem if cris_files else "",
-                "source": n_source, "units": n_units}
-    if domain == "publications_linked":
-        return {"source": n_source, "qualified": n_qualified, "units": n_units}
-    return {}
+def write_page(path: Path, bundle) -> int:
+    """La plantilla con `bundle` incrustado (None = la pagina carga datasets.json)."""
+    blob = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
+    # Rompería el <script> que la incrusta.
+    blob = blob.replace("</", "<\\/")
+    html = TEMPLATE.read_text(encoding="utf-8").replace("__BUNDLE__", blob)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    return len(html)
+
+
+def update_manifest(path: Path, entry: dict):
+    """datasets.json: una entrada por dataset, en el orden de
+    atlas_profiles.DATASETS. Construir un dataset no borra los demas."""
+    entries = json.loads(path.read_text(encoding="utf-8"))["datasets"] if path.exists() else []
+    entries = [e for e in entries if e["id"] != entry["id"]] + [entry]
+    order = list(atlas_profiles.DATASETS)
+    entries.sort(key=lambda e: order.index(e["id"]) if e["id"] in order else len(order))
+    path.write_text(json.dumps({"datasets": entries}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def main():
@@ -336,32 +359,51 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="append", required=True, metavar="DOMINIO=RUN_ID",
                         help="Se puede repetir: --run projects=full-proj-975")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     args = parser.parse_args()
 
-    cfg = lb_config.load()
-    data, method = {}, {}
+    runs = {}
     for pair in args.run:
         domain, _, run_id = pair.partition("=")
         if not run_id:
             raise SystemExit(f"--run mal formado: {pair!r}. Formato: dominio=run_id")
+        runs[domain] = run_id
+    specs = [lb_domains.get(d) for d in runs]
+    datasets, plans = {s.dataset for s in specs}, {s.plan for s in specs}
+    if len(datasets) != 1 or len(plans) != 1:
+        raise SystemExit(f"Un atlas por dataset: estas corridas mezclan {sorted(datasets)} / "
+                         f"{sorted(plans)}. Correr una vez por dataset.")
+    dataset = datasets.pop()
+
+    cfg = lb_config.load()
+    data, method = {}, {}
+    for domain, run_id in runs.items():
         data[domain] = collect(cfg, domain, run_id)
         method[domain] = coverage(domain, set(data[domain]["units"].keys()))
         print(f"  {domain:22s} {len(data[domain]['topics'])} temas · "
               f"{len(data[domain]['units'])} unidades · {len(data[domain]['cells']):,} celdas")
 
-    blob = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    if "</" in blob:
-        # Rompería el <script> que la incrusta.
-        blob = blob.replace("</", "<\\/")
-    html = TEMPLATE.read_text(encoding="utf-8")
-    html = html.replace("__DATA__", blob)
-    html = html.replace("__METHOD__", json.dumps(method, ensure_ascii=False,
-                                                 separators=(",", ":")))
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(html, encoding="utf-8")
-    print(f"\n-> {args.out.relative_to(ROOT)}  ({len(html)/1e6:.2f} MB)")
-    print("Publicar con la herramienta Artifact, o abrir el fichero en el navegador.")
+    profile = atlas_profiles.page_profile(dataset, list(runs), lb_plans.get(plans.pop()))
+    bundle = {"profile": profile, "data": data, "method": method}
+
+    out = args.out_dir.resolve()
+    data_path = out / "data" / f"{dataset}.json"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
+    data_path.write_text(json.dumps(bundle, ensure_ascii=False, separators=(",", ":")),
+                         encoding="utf-8")
+    update_manifest(out / "datasets.json", {
+        "id": dataset, "label": profile["label"], "title": profile["title"], "runs": runs,
+        "built": datetime.date.today().isoformat()})
+    write_page(out / "index.html", None)
+    standalone = out.parent / f"atlas_{dataset}.html"
+    size = write_page(standalone, bundle)
+
+    def rel(path: Path) -> Path:
+        return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+    print(f"\n-> {rel(data_path)}  ({data_path.stat().st_size/1e6:.2f} MB)")
+    print(f"-> {rel(out / 'index.html')} + datasets.json")
+    print(f"-> {rel(standalone)}  ({size/1e6:.2f} MB, archivo unico)")
+    print("Publicar la carpeta con la herramienta Artifact (index.html + datasets.json + data/).")
 
 
 if __name__ == "__main__":

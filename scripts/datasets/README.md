@@ -26,6 +26,9 @@ columna y no se embeben.
    `dataset`, `kind` y `plan`).
 4. El plan nacional en `scripts/lib/lb_plans.py`.
 5. El valor del enum en RDS: un archivo en `sql/migrations/`.
+6. Para el atlas: una entrada en `DATASETS` (y en `PLANS` si el plan es nuevo)
+   de `scripts/analysis/atlas_profiles.py`, y `build_atlas.py --run ...` con
+   sus corridas. Aparece en el selector de universidad junto a los demás.
 
 ## ECOTEC en el servidor
 
