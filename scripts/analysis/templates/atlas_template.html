@@ -10,27 +10,9 @@
   --contain:#0d6b6b;  --contain-soft:#0d6b6b26;   /* cuanto de la unidad es el tema */
   --contrib:#a9630c;  --contrib-soft:#a9630c26;   /* cuanto del tema aporta la unidad */
   --focus:#0d6b6b;
+  /* Solo modo claro, decision del 2026-11-03: la pagina no sigue el tema del
+     sistema ni del anfitrion. */
   color-scheme:light;
-}
-/* Forma plana, no anidada: el anidamiento CSS falla en silencio en motores
-   antiguos y ahi el modo oscuro se quedaria sin definir. */
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --ground:#131519; --surface:#1a1d22; --surface-2:#22262c; --line:#31363d;
-    --ink:#eceae6; --ink-2:#a7abb2; --ink-3:#757a82;
-    --contain:#4bbdb3; --contain-soft:#4bbdb333;
-    --contrib:#e0a355; --contrib-soft:#e0a35533;
-    --focus:#4bbdb3;
-    color-scheme:dark;   /* controles nativos (casilla, borrar busqueda) en oscuro */
-  }
-}
-:root[data-theme="dark"]{
-  --ground:#131519; --surface:#1a1d22; --surface-2:#22262c; --line:#31363d;
-  --ink:#eceae6; --ink-2:#a7abb2; --ink-3:#757a82;
-  --contain:#4bbdb3; --contain-soft:#4bbdb333;
-  --contrib:#e0a355; --contrib-soft:#e0a35533;
-  --focus:#4bbdb3;
-  color-scheme:dark;
 }
 *{box-sizing:border-box}
 /* Las pestanas ocultan secciones con el atributo hidden, pero .explorer,
@@ -1113,13 +1095,7 @@ footer p{margin:0 0 6px;max-width:78ch}
     box.appendChild(el('p', 'desc', 'Qué ' + LEAVES + ' ' + PL.source + ' (' +
       Object.keys(C.on).length + ' ' + PL.level1_plural + ', ' + subsArr.length + ' ' + LEAVES +
       ') desarrolla cada ' + D.noun + ', y quién desarrolla cada ' + LEAF + '.'));
-    box.appendChild(el('p', 'note', 'Cómo se obtiene: se comparan los embeddings de cada unidad y ' +
-      'de cada ' + LEAF + ' (en español y en inglés) y se toman como candidatas las más cercanas, ' +
-      'con similitud de al menos ' + C.floor.toLocaleString('es-ES', {minimumFractionDigits: 2}) +
-      '. Un modelo de lenguaje (' + C.judge + ') califica cada ' +
-      'candidata: 2 si la unidad la desarrolla claramente, 1 si la relación es tangencial y 0 si no ' +
-      'hay relación. Una ' + LEAF + ' está desarrollada si al menos ' + C.minG2 + ' unidades tienen calificación 2, ' +
-      'débil si tiene 1 o 2, y sin desarrollo si no tiene ninguna. ' + PL.validation));
+    
 
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
     avail.forEach(function(d){
