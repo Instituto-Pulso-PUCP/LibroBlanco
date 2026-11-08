@@ -291,6 +291,15 @@ esa conclusión era incorrecta.
 
 ## Avisos que deben acompañar cualquier informe
 
+- **Idioma.** Las unidades en inglés (74 % de las publicaciones PUCP, 93 % de
+  las de ECOTEC) se conectan menos con el plan nacional que las en español
+  (PUCP: 66,5 % con un vínculo claro frente a 93,7 %). Se analizan en su
+  idioma original. Compararlas por su traducción al español se probó y se
+  descartó el 2026-11-08: subía la similitud, pero en una validación ciega a
+  mano los vínculos que agregaba eran 42 % claros frente a 92 % de los que se
+  mantenían, y los que quitaba eran mejores (62 %) que los que agregaba
+  (EXPERIMENTS.md §6.6). La diferencia que queda es sobre todo de contenido.
+
 - El export CRIS del 2026-09-29 (`datos/ProyectosPUCPCRIS-20260929.csv`)
   reemplazó al del 2026-07-21: `cris_abstract` subió de 0.9% a 66.3% de los
   975 proyectos, `cris_keywords` de 0.1% a 93.0%. Antes de este export, la

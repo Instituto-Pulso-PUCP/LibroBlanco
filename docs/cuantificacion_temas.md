@@ -352,6 +352,8 @@ taxonomía ya es oficial.
    sub-temática, tomando la mayor entre su texto en español y una traducción
    al inglés (las publicaciones en inglés puntúan ~0.15 menos contra texto en
    español; traducción cacheada en `salidas/topics/ceplan/subtematicas_en.json`).
+   Comparar además las unidades por su traducción al español se probó y se
+   descartó: agregaba vínculos menos precisos (EXPERIMENTS.md §6.6).
    - Por unidad: sus 8 sub-temáticas más cercanas con similitud ≥ 0.40.
    - Por sub-temática: sus 10 unidades más cercanas sobre el piso, con un
      tope de 6 agregadas por unidad. Sin esta vía inversa, las sub-temáticas

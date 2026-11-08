@@ -17,6 +17,7 @@ Sirve para dos cosas concretas:
 from __future__ import annotations
 
 import lb_domains
+import lb_lang
 
 # Por debajo de esto, una columna declarada como insumo de embedding esta
 # practicamente vacia y conviene avisar en vez de dejar que pase inadvertida.
@@ -147,6 +148,8 @@ def build(domain, rows, units, dropped):
                     if units else 0,
             "units_with_one_source": single_source,
         },
+        # Idioma del texto (lb_lang): se reporta, no se traduce.
+        "languages": lb_lang.language_counts(u["text"] for u in units),
         "columns": columns,
         "warnings": warnings,
     }
@@ -169,8 +172,14 @@ def to_markdown(report) -> str:
         f"mediana {chars['p50']:,} · p95 {chars['p95']:,} · max {chars['max']:,}",
         f"- **Columnas que aportan texto por unidad:** media "
         f"{report['sources_per_unit']['mean']}",
-        "",
     ]
+    if "languages" in report:
+        langs = " · ".join(f"{k} {v:,}" for k, v in sorted(report["languages"].items(),
+                                                            key=lambda x: -x[1]))
+        lines.append(f"- **Idioma del texto:** {langs}. Se embebe siempre el original; las "
+                     "unidades en inglés puntúan algo más bajo contra el plan nacional, que está "
+                     "en español (EXPERIMENTS.md §6.6).")
+    lines.append("")
     if report["warnings"]:
         lines += ["## Avisos", ""]
         lines += [f"- {w}" for w in report["warnings"]] + [""]

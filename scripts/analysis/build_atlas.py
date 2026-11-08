@@ -326,6 +326,8 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
     return {"src": spec.source_csv.name, "rows": report["rows_in_source"],
             "units": report["units_built"], "dropped": report["units_dropped"],
             "chars": report["text_chars"], "cols": cols, "req": spec.required_any,
+            # Idioma del texto de las unidades (lb_lang), para «Datos de origen».
+            "langs": report["languages"],
             "raw_rows": len(raw_rows), "dropped_min_req": dropped_min_req,
             # Embudo de «Datos de origen», contado sobre la corrida que se
             # muestra para que no quede desactualizado cuando cambia el

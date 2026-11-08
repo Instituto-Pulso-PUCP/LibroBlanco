@@ -417,6 +417,77 @@ Files: `scripts/analysis/ceplan_judge_benchmark.py` (gold / run / report),
 `salidas/topics/ceplan/benchmark/` (`unidades.jsonl`, `gold_humano.csv`,
 `respuestas/<model>.jsonl`, `reporte.md`).
 
+### 6.6 Language effect: comparing units by a Spanish translation (2026-11-03, rejected 2026-11-08)
+
+**Question.** English units connect to the plan far less often than Spanish
+ones (PUCP `publications_linked-20261018`: 21.5% of English publications had
+no candidate over the 0.40 floor vs 0% of Spanish ones; 66.5% vs 93.7% with
+at least one grade-2 link). Is that language or content? The §6.1 fix
+(max similarity against the leaf's Spanish text and its English translation)
+was in place.
+
+**Test** (one-off script, not in the repo; inputs and caches on the server in
+`~/atlas_build/lang_test/`). Every English unit (stopword heuristic) of PUCP
+publications_linked (600), PUCP projects (73) and ECOTEC publications (88)
+was translated into Spanish by the pipeline's chat model (Claude Sonnet 5 via
+the LibreChat PUCP agent) and re-embedded; the original was re-embedded in
+the same call. Candidate selection (direct + reverse path) was redone on the
+whole population with only those vectors swapped, and Llama 4 Maverick graded
+the new candidates reading the **original** text, so only retrieval changed.
+Reverse control: 80 Spanish units per domain translated into English.
+
+| | English units: max plan similarity | Spanish control (es → en) | No candidate | ≥ 1 grade-2 link |
+|---|---|---|---|---|
+| PUCP publications (600) | 0.498 → 0.568 | 0.597 → 0.562 | 21.5% → 0% | 66.5% → **84.0%** |
+| PUCP projects (73) | 0.559 → 0.611 | 0.617 → 0.566 | 6.8% → 0% | 84.9% → 84.9% |
+| ECOTEC publications (88) | 0.502 → 0.583 | 0.645 → 0.610 (n = 7) | 4.5% → 0% | 87.5% → **94.3%** |
+
+- The effect on **similarity** is language: translating raises English units
+  and the reverse translation lowers Spanish ones. On link counts, about two
+  thirds of the PUCP publication gap closes (27 → 10 points), but see the
+  validation below: most of what closes it are weak links.
+- Part of the gain is the translation itself (+0.07 one way vs −0.04 the
+  other): an LLM translation reads slightly more uniform.
+- Links move both ways. PUCP publications: 733 grade-2 links kept, 491 new,
+  243 lost; projects 146 / 45 / 45; ECOTEC 131 / 76 / 46.
+- Stage 04: unit–topic top cosine +0.11 (0.70 → 0.81 for PUCP publications),
+  but the top topic is the same for ~91% of units.
+
+**Blind validation (2026-11-08).** 96 grade-2 links from the test, sampled
+from three groups and shuffled (group hidden on a separate tab): links kept
+with and without translation, links lost when translating, and links added
+by translating. One annotator (the project lead) answered "does the unit
+clearly develop this leaf?" yes / partial / no, reading the original text.
+`salidas/validacion/validacion_idioma.xlsx`. Wilson 95% intervals.
+
+| Group | n | Clear (yes) | Related (yes + partial) | No |
+|---|---:|---|---|---:|
+| Kept | 25 | **92%** [75–98%] | 100% | 0 |
+| Lost by translating | 21 | **62%** [41–79%] | 90% | 2 |
+| Added by translating | 50 | **42%** [29–56%] | 80% | 10 |
+| – unit already had candidates | 40 | 48% | 82% | 7 |
+| – unit had no candidate before | 10 | **20%** | 70% | 3 |
+
+- Translation trades good links for weaker ones: what it adds (42% clear) is
+  less precise than what it drops (62%), and far below what it keeps (92%).
+- The "no English unit without candidates" result (21.5% → 0%) is made of
+  links that are only 20% clear: those publications are mostly far from the
+  plan by content, not by language.
+- Applied to all PUCP publication links (rough): grade-2 links ~976 → ~1224,
+  clear ~85% → ~72%, unrelated ~2% → ~8%; about +55 clear links for about
+  +75 unrelated ones.
+- Reading: the language bias in similarity is real, but the judge is generous
+  with the extra candidates translation brings in, so it does not turn into
+  better links.
+
+**Decision (2026-11-08): rejected.** Embeddings stay on the original text and
+the plan cross keeps max(es, en) against each leaf (§6.1). What stays from the
+test: `scripts/lib/lb_lang.py` detects each unit's language, and the inputs
+report, the plan cross report and the atlas («Datos de origen», «Metodología»)
+show the counts and say why English units connect less. Caveats: one
+annotator, small groups (the added and lost intervals overlap; kept vs added
+does not).
+
 ---
 
 ## Run history

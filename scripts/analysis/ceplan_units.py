@@ -15,6 +15,8 @@ Metodo (ver EXPERIMENTS.md §6 y docs/cuantificacion_temas.md §8):
      unidad (el mismo de la etapa 03) y el de cada sub-tematica, tomando la
      mayor entre su texto en espanol y su traduccion al ingles (las
      publicaciones en ingles puntuan ~0.15 menos contra texto en espanol).
+     Comparar ademas las unidades por su traduccion al espanol se probo y se
+     descarto: agrega vinculos menos precisos (EXPERIMENTS.md §6.6).
      Se quedan las `max_candidates` mejores con similitud >= `floor` y, en
      la otra direccion, cada sub-tematica suma sus `reverse_top_m` unidades
      mas similares (sobre el piso) a las candidatas de esas unidades. Sin la
@@ -72,6 +74,7 @@ import lb_ceplan      # noqa: E402
 import lb_cluster     # noqa: E402
 import lb_config      # noqa: E402
 import lb_domains     # noqa: E402
+import lb_lang        # noqa: E402
 import lb_membership  # noqa: E402
 import lb_plans       # noqa: E402
 import lb_store       # noqa: E402
@@ -363,6 +366,8 @@ def run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, dry_run)
     partition = result.partition_metrics
     payload = {
         "domain": domain, "run": run_id, "params": params, "usage": usage,
+        # Idioma de las unidades: las en ingles se conectan menos con el plan.
+        "languages": lb_lang.language_counts(units[u]["text"] for u in ids),
         # Las claves de abajo (on, tema, subtematicas...) conservan los nombres
         # de CEPLAN para cualquier plan; "plan" dice como se llaman de verdad.
         "plan": {"key": plan.key, "name": plan.name, "leaf": plan.leaf, "leaves": plan.leaves,
@@ -443,6 +448,10 @@ def write_domain_report(out_dir, p, subs, plan):
         f"máx(es, en)); verificadas por `{pr['judge_model_id']}` con grado 0/1/2; se conservan las "
         f"de grado ≥ 1 (en el listado por unidad, las {pr['top_n']} con mayor contención). Método y elección del modelo: "
         "EXPERIMENTS.md §6.", "",
+        "Idioma de las unidades: "
+        + ", ".join(f"{k} {v}" for k, v in sorted(p["languages"].items(), key=lambda x: -x[1]))
+        + ". Las en inglés se conectan menos con el plan; sobre todo por contenido: compararlas "
+        "por su traducción al español se probó y agregaba vínculos menos precisos (EXPERIMENTS.md §6.6).", "",
         "## Unidades", "",
         f"- Con al menos una {leaf} confirmada: **{sc['alineada']}** ({sc['alineada'] / n:.0%})",
         f"- Con candidatas pero todas rechazadas por el LLM: {sc['rechazadas_por_llm']}",

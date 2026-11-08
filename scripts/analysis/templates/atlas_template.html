@@ -734,6 +734,23 @@ footer p{margin:0 0 6px;max-width:78ch}
            '2048 caracteres, y los vectores quedan guardados en PostgreSQL con pgvector.' +
            (judge ? ' El cruce con ' + PL.cross + ' usa <code>' + esc(judge) + '</code>, también en Bedrock.' : '') +
            '</p>');
+
+    // Idioma (lb_lang): cuantas unidades en ingles hay en cada universo cargado.
+    var nen = Object.keys(META).map(function(d){
+      var m = META[d];
+      return m.langs && m.langs.en ? m.langs.en.toLocaleString('es') + ' de ' +
+        m.units.toLocaleString('es') + ' ' + plural(DATA[d].noun) : null;
+    }).filter(Boolean);
+    h.push('<h3>Idioma</h3>');
+    h.push('<p>Cada unidad se analiza en el idioma en que fue escrita' +
+           (nen.length ? ' (en este atlas están en inglés ' + nen.join(' y ') + ')' : '') + '. Un texto ' +
+           'en inglés puntúa algo más bajo contra uno en español que otro en español con el mismo ' +
+           'contenido, y ' + PL.cross + ' están en español; para compensarlo, cada una se compara también ' +
+           'con su traducción al inglés. Aun así, las unidades en inglés se conectan menos con el plan. ' +
+           'Se probó comparar además cada unidad por su traducción al español: la similitud sube, pero en ' +
+           'una revisión a mano los vínculos que agregaba eran claramente menos precisos que los que ' +
+           'reemplazaba, así que se descartó. La diferencia que queda es sobre todo de contenido: las ' +
+           'publicaciones en inglés son más a menudo de ciencia básica.</p>');
     box.innerHTML = h.join('');
   }
 
@@ -767,6 +784,13 @@ footer p{margin:0 0 6px;max-width:78ch}
       ].map(function(c){
         return '<span class="chip">' + c[0] + ' <b>' + c[1].toLocaleString('es') + '</b></span>';
       }).join('') + '</div>');
+      if (m.langs){
+        var LN = {es: 'en español', en: 'en inglés', mixto: 'mezclan español e inglés', '?': 'sin idioma claro'};
+        h.push('<p class="note" style="margin:9px 2px 0">Idioma: ' + Object.keys(m.langs)
+          .sort(function(a, b){ return m.langs[b] - m.langs[a]; })
+          .map(function(k){ return m.langs[k].toLocaleString('es') + ' ' + (LN[k] || k); }).join(', ') +
+          '. Cada una se analiza en su idioma original (ver Metodología).</p>');
+      }
 
       // Tabla de llenado por columna: todas las que entran al texto embebido.
       // Las que no estan en todas las unidades (p.ej. keywords de las
