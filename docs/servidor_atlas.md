@@ -11,7 +11,8 @@ Ubuntu 26.04, t4g.small) con nginx, en vez de como artifact de Claude.
 ## Publicar una versión nueva
 
 En el servidor, después de cualquier cambio en las corridas, los perfiles
-(`atlas_profiles.py`) o la plantilla:
+(`atlas_profiles.py`) o la página (`scripts/analysis/templates/atlas/`: `index.html`,
+`atlas.css`, `atlas.js`; `build_atlas.py` los junta en un solo HTML):
 
 ```bash
 cd ~/LibroBlanco && git pull && source config/env.sh
