@@ -12,8 +12,10 @@
 | temas efectivos por unidad | 3.33 | 2.78 |
 | unidades efectivas por tema | 18.3 | 15.7 |
 
-Atlas publicado (versión 25, 2026-10-18): https://claude.ai/artifact/2NWxFbYtfyhtLhjPMUYyFU
-— compartido con cualquiera que tenga el enlace.
+Atlas publicado (desde el 2026-11-08, PUCP y ECOTEC con selector):
+http://44.195.204.129/ en el servidor, con usuario y clave; cómo publicar y
+configuración en `docs/servidor_atlas.md`. El artifact anterior (versión 25,
+2026-10-18, solo PUCP) sigue en https://claude.ai/artifact/2NWxFbYtfyhtLhjPMUYyFU.
 
 Universo **filtrado por el mínimo declarado**: proyectos de CRIS concluidos
 desde 2010 con `title` + `cris_abstract` (1 891 filas CRIS → 1 687 → 1 189);

@@ -23,9 +23,10 @@ El dataset sale de los dominios (lb_domains.Domain.dataset). Salidas:
     salidas/topics/atlas_<id>.html         archivo unico con ese dataset incrustado,
                                            para abrir sin servidor (sin selector)
 
-Publicar la carpeta: index.html como pagina y el resto como `files`. Abierta
+Publicar en el servidor (nginx, http://44.195.204.129/): deploy_atlas.sh, ver
+docs/servidor_atlas.md. Para ver la carpeta en local: serve_atlas.py. Abierta
 desde el disco, el navegador no deja que index.html lea data/: usar el
-archivo unico o `python -m http.server` en la carpeta.
+archivo unico.
 """
 
 from __future__ import annotations
@@ -405,7 +406,7 @@ def main():
     print(f"\n-> {rel(data_path)}  ({data_path.stat().st_size/1e6:.2f} MB)")
     print(f"-> {rel(out / 'index.html')} + datasets.json")
     print(f"-> {rel(standalone)}  ({size/1e6:.2f} MB, archivo unico)")
-    print("Publicar la carpeta con la herramienta Artifact (index.html + datasets.json + data/).")
+    print("Publicar en el servidor: ./scripts/analysis/deploy_atlas.sh (docs/servidor_atlas.md).")
 
 
 if __name__ == "__main__":
