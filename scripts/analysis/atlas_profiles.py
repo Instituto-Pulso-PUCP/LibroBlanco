@@ -1,6 +1,6 @@
 """Textos del Atlas Temático que cambian de un dataset a otro.
 
-build_atlas.py manda los numeros; la plantilla (templates/atlas_template.html)
+build_atlas.py manda los numeros; la pagina (templates/atlas/)
 tiene el texto comun a todos los datasets. Lo que depende de la institucion o
 de su plan nacional -- titulo, nombre de cada universo, embudo de «Datos de
 origen», vocabulario del plan, validacion del cruce -- se escribe aqui y viaja

@@ -2,7 +2,8 @@
 """Genera el Atlas Temático: explorador HTML de la cuantificacion bidireccional.
 
 Lee los resultados de RDS (o del store local) de las corridas de UN dataset
-y los escribe como un archivo de datos que carga `templates/atlas_template.html`.
+y los escribe como un archivo de datos que carga la pagina de `templates/atlas/`
+(armada por atlas_page.py).
 Para cambiar el diseño o el texto comun, editar esa plantilla; el texto propio
 de cada dataset (institucion, universos, plan nacional) esta en
 atlas_profiles.py. El HTML publicado es una salida, no una fuente que haya que
@@ -49,9 +50,9 @@ import lb_membership # noqa: E402
 import lb_plans      # noqa: E402
 import lb_store      # noqa: E402
 
+import atlas_page      # noqa: E402
 import atlas_profiles  # noqa: E402
 
-TEMPLATE = Path(__file__).resolve().parent / "templates" / "atlas_template.html"
 DEFAULT_OUT_DIR = ROOT / "salidas" / "topics" / "atlas"
 
 
@@ -337,11 +338,8 @@ def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
 
 
 def write_page(path: Path, bundle) -> int:
-    """La plantilla con `bundle` incrustado (None = la pagina carga datasets.json)."""
-    blob = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
-    # Rompería el <script> que la incrusta.
-    blob = blob.replace("</", "<\\/")
-    html = TEMPLATE.read_text(encoding="utf-8").replace("__BUNDLE__", blob)
+    """La pagina con `bundle` incrustado (None = la pagina carga datasets.json)."""
+    html = atlas_page.render(bundle)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
     return len(html)

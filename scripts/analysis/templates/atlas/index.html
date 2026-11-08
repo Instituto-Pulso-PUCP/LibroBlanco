@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Temático</title>
+<!-- Tipografías web del Manual de identidad PUCP - Medios digitales (2025), pp. 20-21:
+     Montserrat (titulares), Source Serif (resaltar palabras clave), Roboto (cuerpo). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Serif+4:ital,wght@0,600;1,400;1,600&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="atlas.css">
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <span class="brand__unit">
+        <span class="brand__rubro">Libro Blanco</span>
+        <span class="brand__name">Proyecto Pulso</span>
+      </span>
+    </a>
+    <div class="datasets" id="datasets" hidden>
+      <span class="lbl" id="ds-lbl">Dataset</span>
+      <div class="seg" id="ds" role="group" aria-labelledby="ds-lbl"></div>
+    </div>
+  </div>
+</header>
+
+<!-- Los botones de cada universo los pone mount() segun el dataset, y es mount()
+     quien muestra la banda. -->
+<nav class="menu" id="menu" aria-label="Universo a explorar" hidden>
+  <div class="wrap">
+    <div class="domains" id="domains" role="group" aria-label="Universo a explorar">
+      <button type="button" id="dom-method" data-dom="__method__" aria-pressed="false">Metodología</button>
+      <button type="button" id="dom-provenance" data-dom="__provenance__" aria-pressed="false">Datos de origen</button>
+      <button type="button" id="dom-ceplan" data-dom="__ceplan__" aria-pressed="false">Objetivos Nacionales</button>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="hero">
+    <p class="eyebrow" id="eyebrow">Libro Blanco · Proyecto Pulso</p>
+    <h1 id="title">Atlas Temático</h1>
+    <p class="sub">Cada proyecto y cada publicación se reparte entre varios temas.</p>
+  </div>
+  <p class="loadmsg" id="loadmsg" role="status" hidden></p>
+
+  <div id="atlas" hidden>
+  <div class="omni" id="omni">
+    <div class="omni-bar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="omniq" role="combobox" aria-expanded="false" aria-controls="omni-res"
+             aria-autocomplete="list" aria-label="Buscar en todo el atlas" autocomplete="off" spellcheck="false"
+             placeholder="Busca un proyecto, una publicación o un tema…">
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <div class="omni-years">
+      <span class="lbl" id="yr-lbl">Años</span>
+      <div class="dual" id="yr-dual">
+        <div class="rail"></div><div class="fill" id="yr-fill"></div>
+        <input type="range" id="yr-lo" aria-label="Desde el año">
+        <input type="range" id="yr-hi" aria-label="Hasta el año">
+      </div>
+      <output id="yr-out" for="yr-lo yr-hi"></output>
+      <label><input type="checkbox" id="yr-nodate" checked> incluir sin año</label>
+      <button type="button" class="reset" id="yr-reset" hidden>Todos los años</button>
+      <span class="yr-note" id="yr-note"></span>
+    </div>
+    <div class="omni-res" id="omni-res" role="listbox" aria-label="Resultados" hidden></div>
+  </div>
+
+  <dl class="metrics" id="metrics"></dl>
+
+  <div class="legend">
+    <div class="dir contain">
+      <h3>Cuánto de la unidad es este tema</h3>
+      <p>Suma 100 % en cada proyecto o publicación. Responde: «¿de qué trata esta unidad?»</p>
+      <p class="formula">C[u,t] = afinidad(u,t) ÷ Σ<sub>temas</sub> afinidad(u,·)</p>
+    </div>
+    <div class="dir contrib">
+      <h3>Cuánto del tema aporta la unidad</h3>
+      <p>Suma 100 % en cada tema. Responde: «¿quién sostiene este tema?»</p>
+      <p class="formula">K[u,t] = C[u,t] ÷ Σ<sub>unidades</sub> C[·,t]</p>
+    </div>
+  </div>
+
+  <div class="explorer" id="explorer">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="listTitle">Temas</h2>
+        <span class="count" id="listCount"></span>
+      </div>
+      <div class="searchbox">
+        <label class="sr" for="q" hidden>Buscar</label>
+        <input type="search" id="q" placeholder="Buscar tema o unidad…" autocomplete="off">
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="panel">
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>
+
+  <section class="method" id="method" hidden></section>
+  <section class="method" id="provenance" hidden></section>
+  <section class="method" id="ceplan" hidden></section>
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p class="foot-brand">Libro Blanco · Proyecto Pulso · Pontificia Universidad Católica del Perú</p>
+    <p id="prov"></p>
+  </div>
+</footer>
+
+<script id="bundle" type="application/json">__BUNDLE__</script>
+<script src="atlas.js"></script>
+</html>

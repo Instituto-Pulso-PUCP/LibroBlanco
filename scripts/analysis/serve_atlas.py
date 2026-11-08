@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Servidor local para trabajar en la plantilla del Atlas Temático.
 
-Sirve templates/atlas_template.html leida de nuevo en cada pedido (con
-__BUNDLE__ = null, igual que el index.html que escribe build_atlas.py) y los
-datos ya construidos de salidas/topics/atlas/. Editar la plantilla, guardar y
-recargar el navegador: no hace falta volver a construir.
+Sirve la pagina de templates/atlas/ (index.html, atlas.css, atlas.js) armada
+de nuevo en cada pedido por atlas_page.py, igual que el index.html que escribe
+build_atlas.py, y los datos ya construidos de salidas/topics/atlas/. Editar
+cualquiera de los tres archivos, guardar y recargar el navegador: no hace falta
+volver a construir.
 
     python scripts/analysis/serve_atlas.py          # http://localhost:8000/?ds=ecotec
 
@@ -19,14 +20,15 @@ import functools
 import http.server
 from pathlib import Path
 
+import atlas_page
+
 ROOT = Path(__file__).resolve().parents[2]
-TEMPLATE = Path(__file__).resolve().parent / "templates" / "atlas_template.html"
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] in ("/", "/index.html"):
-            body = TEMPLATE.read_text(encoding="utf-8").replace("__BUNDLE__", "null").encode("utf-8")
+            body = atlas_page.render(None).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -56,7 +58,7 @@ def main():
                          "(en el servidor) y copiar la carpeta aqui.")
     handler = functools.partial(Handler, directory=str(args.data_dir))
     with http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler) as srv:
-        print(f"Atlas en http://localhost:{args.port}/  (plantilla: {TEMPLATE.relative_to(ROOT)})")
+        print(f"Atlas en http://localhost:{args.port}/  (fuentes: {atlas_page.SRC_DIR.relative_to(ROOT)})")
         print("Editar la plantilla y recargar. Ctrl+C para parar.")
         srv.serve_forever()
 
