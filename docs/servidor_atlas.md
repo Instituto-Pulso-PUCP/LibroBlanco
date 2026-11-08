@@ -15,6 +15,15 @@ En el servidor, después de cualquier cambio en las corridas, los perfiles
 `atlas.css`, `atlas.js`; `build_atlas.py` los junta en un solo HTML):
 
 ```bash
+cd ~/LibroBlanco && ./scripts/analysis/rebuild_atlas.sh
+```
+
+`rebuild_atlas.sh` hace `git pull`, reconstruye cada dataset con las corridas
+que ya están publicadas (las lee de `salidas/topics/atlas/datasets.json`) y
+llama a `deploy_atlas.sh`. Para pasar un dataset a otra corrida, construirlo a
+mano una vez; desde ahí el script usa la nueva:
+
+```bash
 cd ~/LibroBlanco && git pull && source config/env.sh
 python3 scripts/analysis/build_atlas.py --run projects=<run> --run publications_linked=<run>
 python3 scripts/analysis/build_atlas.py --run ecotec_projects=<run> --run ecotec_publications=<run>
