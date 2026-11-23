@@ -162,7 +162,9 @@ contribution_mode = "share"
 min_containment = 0.01
 
 # ---------------------------------------------------------------------------
-# Cruce unidad <-> sub-tematica del PEDN 2050 (scripts/analysis/ceplan_units.py).
+# Cruce unidad <-> hoja de un plan (scripts/analysis/ceplan_units.py); nacio
+# para el PEDN 2050. Cada valor se puede sobrescribir por plan en
+# [plans.<clave>] (p.ej. [plans.pnd_ec_2025]).
 # Calibracion y eleccion del modelo: EXPERIMENTS.md §6.
 # ---------------------------------------------------------------------------
 [ceplan]

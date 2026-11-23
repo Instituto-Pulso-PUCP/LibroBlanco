@@ -4,6 +4,7 @@ Las fuentes viven separadas para poder mantenerlas:
 
     templates/atlas/index.html   estructura (enlaza atlas.css y atlas.js)
     templates/atlas/atlas.css    estilos (identidad PUCP)
+    templates/atlas/atlas-charts.js  graficos (SVG a mano, sin dependencias)
     templates/atlas/atlas.js     comportamiento
 
 La salida es un solo HTML con el CSS y el JS incrustados, para que
@@ -18,7 +19,7 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parent / "templates" / "atlas"
 
 CSS_LINK = '<link rel="stylesheet" href="atlas.css">'
-JS_LINK = '<script src="atlas.js"></script>'
+JS_LINKS = ("atlas-charts.js", "atlas.js")
 BUNDLE = "__BUNDLE__"
 
 
@@ -42,5 +43,7 @@ def render(bundle=None) -> str:
     blob = blob.replace("</", "<\\/")   # romperia el <script> que la incrusta
     html = (SRC_DIR / "index.html").read_text(encoding="utf-8")
     html = _replace_once(html, CSS_LINK, "<style>\n" + _source("atlas.css") + "\n</style>")
-    html = _replace_once(html, JS_LINK, "<script>\n" + _source("atlas.js") + "\n</script>")
+    for name in JS_LINKS:
+        html = _replace_once(html, f'<script src="{name}"></script>',
+                             "<script>\n" + _source(name) + "\n</script>")
     return _replace_once(html, BUNDLE, blob)

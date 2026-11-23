@@ -67,7 +67,8 @@ main.wrap{flex:1;padding-block:28px 56px}
   .site-head .wrap{min-height:88px;padding-block:20px}
 }
 
-/* selector de dataset, sobre la barra azul */
+/* selectores de dataset y de plan (retos), sobre la barra azul, a la derecha */
+.site-head .brand{margin-right:auto}
 .datasets{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .datasets .lbl{font-size:12px;color:#ffffffb3}
 .datasets .seg{margin:0;border-color:#ffffff66}
@@ -340,3 +341,122 @@ details.subrow .inner .tablewrap{background:var(--surface)}
 .yr-banner{font-size:12.5px;color:var(--ink-2);background:var(--contain-soft);border-radius:var(--radius);
   padding:7px 11px;margin:0 0 12px}
 @media (prefers-reduced-motion:no-preference){ .track i{transition:width .18s ease} }
+
+/* ==========================================================================
+   5. Resumen y graficos (atlas-charts.js)
+   Una sola tinta: el azul PUCP en pasos validados con el validador de la
+   skill dataviz (rampa ordinal #93b5e2 -> #4f86cc -> #0f4c97; débil #7ea7dc,
+   desarrollada #0f4c97). Ejes y grilla en hairline solida.
+   ========================================================================== */
+:root{
+  --viz-weak:#7ea7dc; --viz-strong:#0f4c97; --viz-mid:#4f86cc; --viz-light:#93b5e2;
+  --viz-empty:#9aa8bb; --viz-grid:#e3e8ef; --viz-track:#dbe6f4;
+}
+#topic-dom,#about-nav{margin:0 0 18px}
+#summary>.seg{margin:0 0 16px}
+.kpis{margin-bottom:18px}
+.kpis dd{font-family:var(--font-head);font-weight:600;font-size:24px;font-variant-numeric:normal}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;margin:0 0 18px}
+.card>h3{font-family:var(--font-head);font-size:18px;font-weight:600;margin:0 0 4px;line-height:1.25;text-wrap:balance}
+.card>.desc,.heat-block>.desc{color:var(--ink-2);font-size:13.5px;margin:0 0 14px;max-width:86ch}
+.sub-h{font-family:var(--font-head);font-size:17px;font-weight:600;margin:28px 0 4px}
+@media (max-width:640px){ .card{padding:16px 14px} }
+
+/* tooltip */
+.viz-tip{position:fixed;z-index:50;pointer-events:none;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 4px 14px #04235426;
+  padding:7px 10px;max-width:320px;font-size:12.5px;line-height:1.35}
+.viz-tip .v{font-weight:700;font-size:13.5px}
+.viz-tip .k{color:var(--ink-2)}
+.viz-tip .d{color:var(--ink-3);font-size:12px}
+
+/* leyendas */
+.viz-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink-2);margin:0 0 12px}
+.viz-legend .it{display:inline-flex;align-items:center;gap:6px}
+.viz-legend .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.viz-legend .grad{width:96px;height:10px;border-radius:2px;display:inline-block;
+  background:linear-gradient(90deg,var(--viz-light),var(--viz-mid),var(--viz-strong))}
+.viz-legend .tick{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-3)}
+.cov-desarrollada{background:var(--viz-strong)}
+.cov-debil{background:var(--viz-weak)}
+.cov-sin_desarrollo{background:transparent;box-shadow:inset 0 0 0 1.5px var(--viz-empty)}
+
+/* mapa de cobertura */
+.cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px 22px}
+.cgroup h4{font-size:13.5px;font-weight:600;margin:0;line-height:1.3;color:var(--ink);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cg-sum{font-size:12px;color:var(--ink-3);margin:2px 0 8px}
+.cells{display:flex;flex-wrap:wrap;gap:3px}
+.cell{appearance:none;border:0;padding:0;width:18px;height:18px;border-radius:3px;cursor:pointer;
+  position:relative}
+.cell::after{content:"";position:absolute;inset:-2px}  /* area de acierto mayor que la marca */
+.cell:hover,.cell:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+
+/* tabla gemela */
+.viz-table{margin-top:12px;font-size:13px}
+.viz-table>summary{cursor:pointer;color:var(--pucp-blue);font-weight:500;width:max-content}
+.viz-table>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.viz-table .tablewrap{margin-top:8px;max-height:360px;overflow:auto}
+
+/* sankey */
+.viz-scroll{overflow-x:auto}
+svg.sankey{min-width:680px;display:block;font-family:var(--font-body)}
+svg.sankey .rib{fill:var(--viz-light);opacity:.45;transition:opacity .12s}
+svg.sankey.hl .rib{opacity:.14}
+svg.sankey .rib.on,svg.sankey.hl .rib.on{opacity:.85;fill:var(--viz-mid)}
+svg.sankey .node rect{fill:var(--viz-strong)}
+svg.sankey .node rect.hit{fill:transparent}
+svg.sankey .node text{font-size:13px;fill:var(--ink)}
+svg.sankey .node{cursor:pointer;outline:none}
+svg.sankey .node:focus-visible text,svg.sankey .node:hover text{text-decoration:underline}
+
+/* multiplos pequeños */
+.smgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px 20px}
+.sm h5{font-size:13px;font-weight:600;margin:0;line-height:1.3;min-height:2.6em}
+.sm-sum{font-size:12px;color:var(--ink-3);margin:0 0 2px}
+.sm svg{display:block;overflow:visible}
+.sm .grid{stroke:var(--viz-grid);stroke-width:1}
+.sm .axis{stroke:var(--line);stroke-width:1}
+.sm .tick{font-family:var(--font-mono);font-size:10.5px;fill:var(--ink-3)}
+.sm .line{fill:none;stroke:var(--viz-strong);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.sm .area{fill:var(--viz-strong);opacity:.1}
+.sm .dot{fill:var(--viz-strong);stroke:var(--surface);stroke-width:2}
+.sm .peak{font-size:11px;fill:var(--ink-2);font-weight:500}
+.sm .cross{stroke:var(--ink-3);stroke-width:1}
+.sm .hit{fill:transparent;outline:none}
+.sm .hit:focus-visible{stroke:var(--focus);stroke-width:2}
+.sm-go{font-size:12.5px;margin-top:2px}
+
+/* mapa de calor */
+.heat-block{margin-top:6px}
+table.heat{border-collapse:separate;border-spacing:2px;font-size:12.5px}
+table.heat th{font-weight:500;text-align:left;vertical-align:bottom;padding:4px 8px 4px 0;color:var(--ink-2)}
+table.heat thead th{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+table.heat th.hc{text-align:center;padding:4px;min-width:72px;max-width:110px;white-space:normal}
+table.heat tbody th{max-width:320px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);
+  background:transparent;vertical-align:middle}
+table.heat tbody th .unit-meta{display:block}
+table.heat thead th{background:transparent}
+table.heat .rl{display:block}
+table.heat td.hcell{padding:0;height:30px;min-width:72px;outline:none}
+table.heat .hsw{display:block;height:100%;min-height:30px;border-radius:3px}
+table.heat td.hcell:hover .hsw,table.heat td.hcell:focus-visible .hsw{outline:2px solid var(--ink);outline-offset:1px}
+.heat-zero{background:var(--surface-2)}
+
+/* medidores (comparar planes) */
+.meters{display:flex;flex-direction:column;gap:2px}
+.meter{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(120px,2fr) 52px;gap:6px 16px;align-items:center;
+  padding:9px 10px;border-radius:var(--radius);background:transparent;border:0;font:inherit;color:inherit;
+  text-align:left;width:100%}
+button.meter{cursor:pointer}
+button.meter:hover{background:var(--surface-2)}
+button.meter:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.meter.cur{background:var(--surface-2)}
+.meter .m-nm b{font-weight:600;font-size:14px;display:block}
+.meter.cur .m-nm b::after{content:" · elegido";font-weight:400;color:var(--ink-3);font-size:12px}
+.m-track{height:8px;border-radius:4px;background:var(--viz-track);overflow:hidden;display:block}
+.m-track i{display:block;height:100%;background:var(--viz-strong);border-radius:4px}
+.m-val{font-family:var(--font-head);font-weight:600;font-size:15px;text-align:right}
+@media (max-width:560px){ .meter{grid-template-columns:minmax(0,1fr) 52px}
+  .meter .m-track{grid-column:1 / -1;grid-row:2} }

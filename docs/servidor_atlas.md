@@ -3,7 +3,8 @@
 Desde el 2026-11-08 el atlas se sirve desde el EC2 del proyecto (`pulso-vri`,
 Ubuntu 26.04, t4g.small) con nginx, en vez de como artifact de Claude.
 
-- **Dirección:** http://44.195.204.129/ (`?ds=pucp` o `?ds=ecotec` abre un dataset)
+- **Dirección:** http://44.195.204.129/ (`?ds=pucp` o `?ds=ecotec` abre un dataset;
+  `&plan=pedn2050` o `&plan=pnd_ec_2025`, un plan de retos)
 - **Acceso:** usuario `pulso` y una clave compartida (HTTP basic auth). La clave
   no está en el repositorio; pedirla al responsable del proyecto.
 - **Sin HTTPS todavía:** no hay dominio. Por HTTP la clave viaja sin cifrar.
@@ -12,7 +13,7 @@ Ubuntu 26.04, t4g.small) con nginx, en vez de como artifact de Claude.
 
 En el servidor, después de cualquier cambio en las corridas, los perfiles
 (`atlas_profiles.py`) o la página (`scripts/analysis/templates/atlas/`: `index.html`,
-`atlas.css`, `atlas.js`; `build_atlas.py` los junta en un solo HTML):
+`atlas.css`, `atlas-charts.js`, `atlas.js`; `build_atlas.py` los junta en un solo HTML):
 
 ```bash
 cd ~/LibroBlanco && ./scripts/analysis/rebuild_atlas.sh
@@ -29,6 +30,24 @@ python3 scripts/analysis/build_atlas.py --run projects=<run> --run publications_
 python3 scripts/analysis/build_atlas.py --run ecotec_projects=<run> --run ecotec_publications=<run>
 ./scripts/analysis/deploy_atlas.sh
 ```
+
+### Mostrar otro plan de retos en un dataset
+
+El atlas muestra, para cada dataset, todos los planes de
+`atlas_profiles.PLANS` con los que ya se cruzó alguna de sus corridas, con un
+selector «Retos» en la cabecera (no aparece si hay uno solo). Basta con correr
+el cruce y reconstruir:
+
+```bash
+python3 scripts/analysis/ceplan_units.py --plan pedn2050 \
+    --run ecotec_projects=<run> --run ecotec_publications=<run>
+./scripts/analysis/rebuild_atlas.sh
+```
+
+Cada cruce viaja en su propio archivo, `data/<dataset>/<plan>.json`, y la
+página lo carga al elegir el plan. Un plan nuevo necesita además su entrada en
+`atlas_profiles.PLANS` (nombre corto, rótulo de la pestaña, frase de
+validación); sin ella `build_atlas.py` avisa y no lo muestra.
 
 `deploy_atlas.sh` copia `salidas/topics/atlas/` a una carpeta nueva en
 `/var/www/atlas-releases/<fecha>` y cambia el enlace `/var/www/atlas` de un

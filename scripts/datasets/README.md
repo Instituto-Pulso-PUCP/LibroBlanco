@@ -22,13 +22,15 @@ columna y no se embeben.
    --publications ...`, `build_external_candidates.py`, revisión a mano de las
    filas `revisar` y volver a correr el adaptador (pasos en el docstring de
    `ecotec.py`).
-3. Un `Domain` por tipo de unidad en `scripts/lib/lb_domains.py` (con
-   `dataset`, `kind` y `plan`).
-4. El plan nacional en `scripts/lib/lb_plans.py`.
+3. La institucion en `DATASETS` de `scripts/lib/lb_domains.py` (nombre, pais
+   y gentilicio, que van en el prompt del verificador del cruce) y un `Domain`
+   por tipo de unidad (con `dataset`, `kind` y `plan`, su plan por defecto).
+4. Si trae un plan nacional nuevo, su entrada en `scripts/lib/lb_plans.py`.
 5. El valor del enum en RDS: un archivo en `sql/migrations/`.
 6. Para el atlas: una entrada en `DATASETS` (y en `PLANS` si el plan es nuevo)
    de `scripts/analysis/atlas_profiles.py`, y `build_atlas.py --run ...` con
-   sus corridas. Aparece en el selector de universidad junto a los demás.
+   sus corridas. Aparece en el selector de universidad junto a los demás, con
+   todos los planes con los que ya se cruzó en el selector «Retos».
 
 ## ECOTEC en el servidor
 
@@ -54,3 +56,25 @@ python3 scripts/analysis/ceplan_units.py \
 El cruce con el PND escribe `07_pnd_units.json`, `pnd_por_unidad.csv`,
 `pnd_por_politica.csv` y `reporte_pnd_unidades.md` en cada corrida, y la
 cobertura conjunta en `salidas/topics/plans/pnd_ec_2025/reporte_cobertura.md`.
+
+## Cruzar un dataset con otro plan
+
+Cualquier dataset se cruza con cualquier plan de `lb_plans.PLANS`; el plan del
+`Domain` es solo el de por defecto. Una ejecucion = un dataset y un plan:
+
+```bash
+python3 scripts/analysis/ceplan_units.py --plan pedn2050 --dry-run     --run ecotec_projects=<run> --run ecotec_publications=<run>
+python3 scripts/analysis/ceplan_units.py --plan pedn2050     --run ecotec_projects=<run> --run ecotec_publications=<run>
+```
+
+Los archivos llevan el prefijo del plan (`07_ceplan_units.json`,
+`07_pnd_units.json`...), asi que una corrida guarda los cruces con varios planes
+a la vez. Si el plan es de otro pais que el dataset, el prompt del verificador
+agrega que se juzga por el tema y no por el pais (`lb_plans.Plan.judge_system`);
+ese cruce no tiene todavia una validacion manual.
+
+Un plan nuevo (p.ej. los retos de Prociencia) que no sale de un adaptador: su
+`policies.csv` en `datos/plans/<clave>/` con
+`policy_id, label, text, l1_id, l1_label[, l2_label]` (`l2_label` vacio o
+ausente en un plan de dos niveles) y una entrada en `lb_plans.PLANS` con
+`load=_policies_csv_loader(plan_csv("<clave>"))`.

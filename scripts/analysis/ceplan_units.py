@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Cruce unidad (proyecto / publicacion) <-> hoja de un plan nacional.
 
-Nacio para el PEDN 2050 / CEPLAN (sub-tematicas); ahora el plan sale del
-dominio (lb_domains.Domain.plan -> lb_plans): PUCP contra el PEDN 2050,
-ECOTEC contra las politicas del PND 2025-2029. Abajo "sub-tematica" se lee
-como "hoja del plan".
+Nacio para el PEDN 2050 / CEPLAN (sub-tematicas); ahora cruza cualquier
+dominio con cualquier plan de lb_plans. Sin --plan, cada dominio usa su plan
+por defecto (lb_domains.Domain.plan: PUCP el PEDN 2050, ECOTEC el PND
+2025-2029); con --plan, p.ej. ECOTEC contra el PEDN 2050. Abajo
+"sub-tematica" se lee como "hoja del plan".
 
 Responde, por dominio, las dos preguntas del encargo:
   - "¿que sub-tematicas CEPLAN desarrolla este proyecto?"  (hasta 5, con piso)
@@ -38,9 +39,15 @@ Metodo (ver EXPERIMENTS.md §6 y docs/cuantificacion_temas.md §8):
 
 Salidas en salidas/topics/<dominio>/<run>/, con el prefijo del plan
 (PEDN: "ceplan", PND: "pnd"): 07_<prefijo>_units.json, <prefijo>_por_unidad.csv,
-<prefijo>_por_<hoja>.csv, reporte_<prefijo>_unidades.md; y la cobertura
-cruzada de los dominios en <plan.cache_dir>/reporte_cobertura.md
-(PEDN: salidas/topics/ceplan/).
+<prefijo>_por_<hoja>.csv, reporte_<prefijo>_unidades.md. Como el prefijo es del
+plan, una misma corrida puede tener el cruce con varios planes a la vez. La
+cobertura cruzada de los dominios va en <plan.cache_dir>/reporte_cobertura.md
+para el dataset del plan (PEDN: salidas/topics/ceplan/) y en
+reporte_cobertura_<dataset>.md para cualquier otro.
+
+Una ejecucion = un dataset y un plan. El prompt del verificador depende de los
+dos (lb_plans.Plan.judge_system): para un dataset de otro pais que el plan
+agrega que se juzga por el tema y no por el pais.
 
 Parametros: seccion [ceplan] de config/pipeline.toml, sobrescribible por plan
 en [plans.<clave>] (p.ej. plans.pnd_ec_2025.developed_min_grade2).
@@ -50,6 +57,8 @@ en [plans.<clave>] (p.ej. plans.pnd_ec_2025.developed_min_grade2).
         --run projects=full-proj-646 --run publications_linked=publications_linked-529
     python scripts/analysis/ceplan_units.py --run projects=full-proj-646 --dry-run
     python scripts/analysis/ceplan_units.py \\
+        --run ecotec_projects=<run> --run ecotec_publications=<run>
+    python scripts/analysis/ceplan_units.py --plan pedn2050 --dry-run \\
         --run ecotec_projects=<run> --run ecotec_publications=<run>
 """
 from __future__ import annotations
@@ -166,8 +175,12 @@ def load_taxonomy(cfg, plan):
 # --------------------------------------------------------------------------
 
 def build_user(text, cands, subs, plan):
-    lines = [f"{n + 1}. {subs[j]['label']} ({plan.judge_level2_tag}: {subs[j]['tema']}; "
-             f"{subs[j]['on_label'][:60]})" for n, (j, _sim) in enumerate(cands)]
+    def context(s):
+        # Un plan de dos niveles no tiene nivel 2 (tema vacio): solo el nivel 1.
+        lvl1 = s["on_label"][:60]
+        return f"{plan.judge_level2_tag}: {s['tema']}; {lvl1}" if s["tema"] else lvl1
+    lines = [f"{n + 1}. {subs[j]['label']} ({context(subs[j])})"
+             for n, (j, _sim) in enumerate(cands)]
     return (f"INVESTIGACION:\n{text[:MAX_TEXT_CHARS]}\n\n{plan.judge_header}:\n"
             + "\n".join(lines))
 
@@ -176,9 +189,10 @@ def cache_key(model_id, system, user):
     return hashlib.sha256(f"{model_id}\n{system}\n{user}".encode()).hexdigest()[:24]
 
 
-def judge_units(cfg, params, plan, jobs, cache_path):
-    """jobs: [(unit_id, user_prompt, sub_ids candidatas en orden)]. Devuelve {unit_id: grados|None}
-    y el uso de tokens de las llamadas nuevas."""
+def judge_units(cfg, params, system, jobs, cache_path):
+    """jobs: [(unit_id, user_prompt, sub_ids candidatas en orden)]; system: prompt del
+    verificador (lb_plans.Plan.judge_system). Devuelve {unit_id: grados|None} y el uso de
+    tokens de las llamadas nuevas."""
     cache = {}
     if cache_path.exists():
         for line in cache_path.open(encoding="utf-8"):
@@ -192,13 +206,13 @@ def judge_units(cfg, params, plan, jobs, cache_path):
     def work(job):
         unit_id, user, sub_ids = job
         n = len(sub_ids)
-        key = cache_key(model_id, plan.judge_system, user)
+        key = cache_key(model_id, system, user)
         if key in cache and cache[key]["grades"] is not None:
             return unit_id, cache[key]["grades"]
         client = lb_aws.BedrockClient(cfg)
         grades, raw, used = None, "", {"input_tokens": 0, "output_tokens": 0}
         for _attempt in range(2):  # un reintento si la respuesta no se pudo leer
-            raw = client.converse(plan.judge_system, user, model_id=model_id, max_tokens=2048)
+            raw = client.converse(system, user, model_id=model_id, max_tokens=2048)
             used["input_tokens"] += client.last_usage["input_tokens"]
             used["output_tokens"] += client.last_usage["output_tokens"]
             grades = parse_grades(raw, n)
@@ -286,7 +300,8 @@ def run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, dry_run)
     jobs = [(u, build_user(units[u]["text"], candidates[u], subs, plan),
              [subs[j]["id"] for j, _s in candidates[u]])
             for u in ids if candidates[u]]
-    grades, usage = judge_units(cfg, params, plan, jobs,
+    dataset = lb_domains.get(domain).dataset
+    grades, usage = judge_units(cfg, params, plan.judge_system(dataset), jobs,
                                 out_dir / f"07_{prefix}_judge_cache.jsonl")
     failed = sorted(u for u, g in grades.items() if g is None)
     price = PRICES.get(PRICE_KEY.get(params["judge_model_id"], ""), (0.0, 0.0))
@@ -365,7 +380,7 @@ def run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, dry_run)
 
     partition = result.partition_metrics
     payload = {
-        "domain": domain, "run": run_id, "params": params, "usage": usage,
+        "domain": domain, "dataset": dataset, "run": run_id, "params": params, "usage": usage,
         # Idioma de las unidades: las en ingles se conectan menos con el plan.
         "languages": lb_lang.language_counts(units[u]["text"] for u in ids),
         # Las claves de abajo (on, tema, subtematicas...) conservan los nombres
@@ -440,8 +455,12 @@ def write_domain_report(out_dir, p, subs, plan):
             for c in ("desarrollada", "debil", "sin_desarrollo")}
     total_eq = sum(p["by_on"].values()) or 1.0
     pr = p["params"]
+    dataset = lb_domains.get(domain).dataset
+    who = domain_name(domain)
+    if dataset != plan.home_dataset:
+        who += f" ({lb_domains.dataset(dataset).label})"
     lines = [
-        f"# {leaves.capitalize()} del {plan.name} por unidad — {domain_name(domain)}", "",
+        f"# {leaves.capitalize()} del {plan.name} por unidad — {who}", "",
         f"Corrida `{p['run']}` · {n} {noun} · {len(subs)} {leaves} ({plan.source_note}). "
         f"Candidatas por embeddings (piso {pr['floor']}, hasta {pr['max_candidates']} por unidad "
         f"más las {pr['reverse_top_m']} unidades más cercanas a cada {leaf}, "
@@ -494,9 +513,12 @@ def write_domain_report(out_dir, p, subs, plan):
                                                                       encoding="utf-8")
 
 
-def write_cross_report(payloads, subs, plan):
-    """Cobertura conjunta: que hojas del plan no desarrolla ningun dominio."""
-    lines = [f"# Cobertura de las {plan.leaves} del {plan.name} — proyectos y publicaciones", "",
+def write_cross_report(payloads, subs, plan, dataset):
+    """Cobertura conjunta: que hojas del plan no desarrolla ningun dominio del dataset."""
+    title = f"# Cobertura de las {plan.leaves} del {plan.name} — proyectos y publicaciones"
+    if dataset != plan.home_dataset:
+        title += f" de {lb_domains.dataset(dataset).label}"
+    lines = [title, "",
              f"| {plan.level1} | {plan.level2} | {plan.leaf.capitalize()} | " +
              " | ".join(f"{domain_noun(p['domain'])} (grado 2)" for p in payloads) + " |",
              "|---|---|---|" + "---:|" * len(payloads)]
@@ -516,31 +538,52 @@ def write_cross_report(payloads, subs, plan):
             f"{len(nobody)}**", ""]
     head += [f"- {s['on']} · {s['tema']} · {s['label']}" for s in nobody] + [""]
     lines[2:2] = head
-    plan.cache_dir.mkdir(parents=True, exist_ok=True)
-    (plan.cache_dir / "reporte_cobertura.md").write_text("\n".join(lines), encoding="utf-8")
-    print(f"\n-> {(plan.cache_dir / 'reporte_cobertura.md').relative_to(ROOT)} "
+    path = plan.coverage_report_path(dataset)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"\n-> {path.relative_to(ROOT)} "
           f"({len(nobody)} {plan.leaves} sin ninguna unidad de grado 2)")
+
+
+def resolve_plan(runs, plan_key=None):
+    """(plan, dataset) de una ejecucion: un solo dataset; el plan, el pedido o el
+    plan por defecto comun de los dominios."""
+    specs = [lb_domains.get(domain) for domain, _run in runs]
+    datasets = {s.dataset for s in specs}
+    if len(datasets) != 1:
+        raise SystemExit(f"Los dominios de --run son de datasets distintos ({sorted(datasets)}); "
+                         "correr una vez por dataset.")
+    if not plan_key:
+        plan_keys = {s.plan for s in specs}
+        if len(plan_keys) != 1:
+            raise SystemExit(f"Los dominios de --run tienen planes por defecto distintos "
+                             f"({sorted(plan_keys)}); elegir uno con --plan.")
+        plan_key = plan_keys.pop()
+    return lb_plans.get(plan_key), datasets.pop()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="append", required=True, metavar="DOMINIO=RUN_ID")
+    parser.add_argument("--plan", choices=sorted(lb_plans.PLANS),
+                        help="Plan contra el que se cruza (por defecto, el de los dominios: "
+                             "lb_domains.Domain.plan).")
     parser.add_argument("--model", help="Sobrescribe ceplan.judge_model_id.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Solo cuenta candidatas; no llama al LLM ni escribe nada.")
     args = parser.parse_args()
 
     runs = [pair.partition("=")[::2] for pair in args.run]
-    plan_keys = {lb_domains.get(domain).plan for domain, _run in runs}
-    if len(plan_keys) != 1:
-        raise SystemExit(f"Los dominios de --run se cruzan con planes distintos ({sorted(plan_keys)}); "
-                         "correr una vez por plan.")
-    plan = lb_plans.get(plan_keys.pop())
+    for domain, run_id in runs:
+        if not run_id:
+            raise SystemExit(f"--run mal formado: {domain!r}. Formato: dominio=run_id")
+    plan, dataset = resolve_plan(runs, args.plan)
 
     cfg = lb_config.load()
     params = params_from(cfg, args, plan)
-    print(f"Plan: {plan.name} · verificador: {params['judge_model_id']} · piso {params['floor']} · "
+    print(f"Dataset: {lb_domains.dataset(dataset).label} · plan: {plan.name} · "
+          f"verificador: {params['judge_model_id']} · piso {params['floor']} · "
           f"hasta {params['max_candidates']} candidatas · top {params['top_n']}")
     subs, emb_es, emb_en = load_taxonomy(cfg, plan)
     print(f"Taxonomía: {len(subs)} {plan.leaves} embebidas (es + en)")
@@ -551,7 +594,7 @@ def main():
         if p:
             payloads.append(p)
     if len(payloads) > 1:
-        write_cross_report(payloads, subs, plan)
+        write_cross_report(payloads, subs, plan, dataset)
 
 
 if __name__ == "__main__":

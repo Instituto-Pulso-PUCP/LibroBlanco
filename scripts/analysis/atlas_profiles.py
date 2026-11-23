@@ -7,9 +7,11 @@ origen», vocabulario del plan, validacion del cruce -- se escribe aqui y viaja
 en el archivo de datos de cada dataset, para que el selector de la pagina
 cambie todo a la vez.
 
-Anadir un dataset al atlas = una entrada en DATASETS (y en PLANS si trae un
-plan nacional nuevo). Los niveles del plan (hoja, nivel 1) salen de
-lb_plans.Plan; aqui solo va lo que el atlas necesita ademas.
+Anadir un dataset al atlas = una entrada en DATASETS. Anadir un plan = una
+entrada en PLANS: el atlas muestra, para cada dataset, todos los planes de PLANS
+con los que ya se cruzo alguna de sus corridas (ceplan_units.py --plan), con un
+selector. Los niveles del plan (hoja, nivel 1) salen de lb_plans.Plan; aqui
+solo va lo que el atlas necesita ademas.
 
 Los textos de PUCP son exactamente los que la plantilla tenia escritos antes
 de existir este modulo: la pagina publicada no cambia.
@@ -35,13 +37,16 @@ MODEL_NAMES = {"us.meta.llama4-maverick-17b-instruct-v1:0": "Llama 4 Maverick"}
 
 # Lo que el atlas dice del plan, ademas de lo que ya trae lb_plans.Plan.
 # `source` lleva su preposicion: «Qué políticas del Plan...» / «de la hoja...».
-# `validation` es la frase sobre la revision manual del cruce; None si el plan
-# todavia no tiene una (la pagina lo dice en vez de mostrar cifras ajenas).
+# `validation` es la frase sobre la revision manual del cruce, que vale solo
+# para el dataset `validated_for`: con cualquier otro dataset (o si es None) la
+# pagina dice que no hay revision en vez de mostrar cifras ajenas. El orden de
+# PLANS es el del selector de la pagina.
 PLANS = {
     "pedn2050": {
         "name": "PEDN 2050", "short": "CEPLAN", "tab": "Objetivos Nacionales",
         "cross": "los Objetivos Nacionales", "level1_plural": "Objetivos Nacionales",
         "source": "de la hoja «Líneas de Inv.» del PEDN 2050",
+        "validated_for": "pucp",
         "validation": ("En una revisión manual de 130 vínculos, el 84 % tenía una relación real; una "
                        "calificación 2 indica una relación real con alta confianza (91 %), no "
                        "necesariamente que la sub-temática sea el centro de la unidad (53 %)."),
@@ -50,10 +55,18 @@ PLANS = {
         "name": "PND 2025-2029", "short": "PND", "tab": "Plan Nacional (PND)",
         "cross": "las políticas del PND", "level1_plural": "ejes",
         "source": "del Plan Nacional de Desarrollo 2025-2029 del Ecuador",
-        "validation": ("Para este plan todavía no hay una revisión manual de los vínculos: no hay una "
-                       "tasa de acierto medida y las calificaciones son las del verificador tal cual."),
+        "validated_for": None, "validation": None,
     },
 }
+
+NOT_VALIDATED = ("Para este cruce todavía no hay una revisión manual de los vínculos: no hay una tasa "
+                 "de acierto medida y las calificaciones son las del verificador tal cual.")
+# lb_domains.Dataset.country y lb_plans.Plan.country van sin tildes (prompt).
+COUNTRY_NAMES = {"Peru": "Perú"}
+
+
+def _country(name: str) -> str:
+    return COUNTRY_NAMES.get(name, name)
 
 
 def es_int(n: int) -> str:
@@ -153,7 +166,9 @@ def _ecotec_publications(raw_rows, rows, n_units):
 
 # --- Datasets ----------------------------------------------------------------
 # domains: tab = nombre corto (botones, encabezados), label = nombre largo
-# (pie de pagina), noun = como se llama una unidad, provenance = embudo.
+# (pie de pagina), noun = como se llama una unidad, provenance = embudo,
+# group = que es la agrupacion de la unidad (lb_domains.Domain.grouping_column),
+# para el perfil por agrupacion de «Retos»; solo en proyectos.
 DATASETS = {
     "pucp": {
         "label": "PUCP",
@@ -164,7 +179,7 @@ DATASETS = {
                              "propio para poder extraer temas. Esta pestaña muestra ese filtro paso a paso, "
                              "por qué se puso ahí el corte, y cuánto texto queda al final en cada unidad."),
         "domains": {
-            "projects": {"tab": "Proyectos", "noun": "proyecto",
+            "projects": {"tab": "Proyectos", "noun": "proyecto", "group": "Departamento",
                          "label": "Proyectos de investigación PUCP concluidos (2010+)",
                          "provenance": _pucp_projects},
             "publications": {"tab": "Publicaciones", "noun": "publicación",
@@ -183,7 +198,7 @@ DATASETS = {
                              "encontrado, porque hace falta texto propio para poder extraer temas. Esta "
                              "pestaña muestra cada paso y cuánto texto queda al final en cada unidad."),
         "domains": {
-            "ecotec_projects": {"tab": "Proyectos", "noun": "proyecto",
+            "ecotec_projects": {"tab": "Proyectos", "noun": "proyecto", "group": "Línea de investigación",
                                 "label": "Proyectos de investigación ECOTEC (registro entregado por la universidad)",
                                 "provenance": _ecotec_projects},
             "ecotec_publications": {"tab": "Publicaciones de proyectos", "noun": "publicación",
@@ -199,20 +214,40 @@ def provenance(dataset: str, domain: str, raw_rows, rows, n_units) -> dict | Non
     return fn(raw_rows, rows, n_units) if fn else None
 
 
-def page_profile(dataset: str, domains: list[str], plan) -> dict:
-    """Lo que la pagina necesita para presentarse como este dataset. `plan` es
-    el lb_plans.Plan de sus dominios."""
+def plan_profile(dataset: str, plan) -> dict:
+    """Vocabulario y avisos de un plan (lb_plans.Plan) visto desde un dataset."""
+    import lb_domains
+    extra = {k: v for k, v in PLANS[plan.key].items() if k not in ("validated_for", "validation")}
+    validated = PLANS[plan.key]["validated_for"] == dataset and PLANS[plan.key]["validation"]
+    home = lb_domains.dataset(dataset)
+    foreign = None
+    if plan.country and plan.country != home.country:
+        foreign = (f"El {extra['name']} es un plan de {_country(plan.country)} y las unidades son de "
+                   f"una universidad de {_country(home.country)}: el verificador juzga por el tema y "
+                   "el conocimiento que aporta cada unidad, no por el país donde se hizo ni por el "
+                   "que estudia.")
+    return {"key": plan.key, "leaf": plan.leaf, "leaves": plan.leaves,
+            "level1_long": plan.level1_long, **extra,
+            "validation": PLANS[plan.key]["validation"] if validated else NOT_VALIDATED,
+            "validated": bool(validated), "foreign": foreign}
+
+
+def page_profile(dataset: str, domains: list[str], plans: list, default: str) -> dict:
+    """Lo que la pagina necesita para presentarse como este dataset. `plans`:
+    los lb_plans.Plan que se muestran, en el orden del selector; `default`: la
+    clave del que se abre primero."""
     import lb_domains
     ds = DATASETS[dataset]
-    extra = PLANS[plan.key]
     return {
         "id": dataset, "label": ds["label"], "title": ds["title"], "eyebrow": ds["eyebrow"],
         "provenance_intro": ds["provenance_intro"],
         "extraction_html": EXTRACTION_HTML, "extraction_footer": EXTRACTION_FOOTER,
         "order": domains,
         "domains": {d: {"tab": ds["domains"][d]["tab"], "label": ds["domains"][d]["label"],
-                        "noun": ds["domains"][d]["noun"], "kind": lb_domains.get(d).kind}
+                        "noun": ds["domains"][d]["noun"], "kind": lb_domains.get(d).kind,
+                        "group": ds["domains"][d].get("group")}
                     for d in domains},
-        "plan": {"key": plan.key, "leaf": plan.leaf, "leaves": plan.leaves,
-                 "level1_long": plan.level1_long, **extra},
+        "plans": {p.key: plan_profile(dataset, p) for p in plans},
+        "plan_order": [p.key for p in plans],
+        "plan_default": default,
     }

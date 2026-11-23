@@ -5,8 +5,11 @@
   // pagina solo tiene el texto comun. Publicada, carga datasets.json y luego
   // data/<id>.json; como archivo unico (atlas_<id>.html) trae su dataset
   // incrustado y no muestra el selector.
+  // Cada dataset se puede ver contra varios planes (retos): el cruce con cada
+  // uno viaja aparte, en data/<id>/<plan>.json, y se carga al elegirlo. En el
+  // archivo unico vienen todos incrustados (bundle.plans).
   var INLINE = JSON.parse(document.getElementById('bundle').textContent);
-  var loaded = {}, ctrl = null, current = null;
+  var loaded = {}, ctrl = null, current = null, planHook = null;
   var msg = document.getElementById('loadmsg');
 
   function status(text){ msg.textContent = text || ''; msg.hidden = !text; }
@@ -42,6 +45,76 @@
       box.appendChild(b);
     });
   }
+  // --- planes ---------------------------------------------------------------
+  // Un archivo de datos de antes de los planes multiples trae un solo plan
+  // (profile.plan) y su cruce dentro de cada dominio (data[d].ceplan).
+  function normalize(B){
+    var PF = B.profile;
+    if (PF.plans) return B;
+    var k = PF.plan.key;
+    PF.plans = {}; PF.plans[k] = PF.plan; PF.plan_order = [k]; PF.plan_default = k;
+    B.plans = {}; B.plans[k] = {};
+    Object.keys(B.data).forEach(function(d){ B.plans[k][d] = B.data[d].ceplan || null; });
+    return B;
+  }
+  function initialPlan(B){
+    var PF = B.profile, want = null;
+    try { want = new URLSearchParams(location.search).get('plan'); } catch (e) {}
+    if (!want) try { want = localStorage.getItem('atlas-plan'); } catch (e) {}
+    return PF.plan_order.indexOf(want) >= 0 ? want : PF.plan_default;
+  }
+  function rememberPlan(key){
+    try { localStorage.setItem('atlas-plan', key); } catch (e) {}
+    try {
+      var u = new URL(location.href); u.searchParams.set('plan', key);
+      history.replaceState(null, '', u.toString());
+    } catch (e) {}
+  }
+  function loadPlan(B, key){
+    B.plans = B.plans || {};
+    if (B.plans[key]) return Promise.resolve(B.plans[key]);
+    return fetchJSON('data/' + encodeURIComponent(B.profile.id) + '/' + encodeURIComponent(key) + '.json')
+      .then(function(P){ B.plans[key] = P; return P; });
+  }
+  function paintPlans(B, key){
+    var PF = B.profile, box = document.getElementById('plans');
+    box.textContent = '';
+    document.getElementById('plansel').hidden = PF.plan_order.length < 2;
+    PF.plan_order.forEach(function(k){
+      var p = PF.plans[k], b = document.createElement('button');
+      b.type = 'button'; b.textContent = p.short; b.title = p.name;
+      b.setAttribute('aria-pressed', String(k === key));
+      b.addEventListener('click', function(){ if (k !== B.planKey) choosePlan(B, k); });
+      box.appendChild(b);
+    });
+  }
+  function choosePlan(B, key){
+    var id = B.profile.id;
+    B.planKey = key; paintPlans(B, key);
+    if (!B.plans || !B.plans[key]) status('Cargando ' + B.profile.plans[key].name + '…');
+    loadPlan(B, key).then(function(){
+      if (current !== id || B.planKey !== key) return;   // se eligio otra cosa mientras cargaba
+      status(''); rememberPlan(key);
+      if (planHook) planHook(key);
+    }).catch(function(err){
+      if (B.planKey === key) status('No se pudo cargar el cruce con ' + B.profile.plans[key].name +
+        ' (' + err.message + ').');
+    });
+  }
+  // Pinta el dataset ya con su plan cargado: la pagina nunca se muestra con un
+  // plan a medio llegar.
+  function start(B){
+    normalize(B);
+    var key = initialPlan(B);
+    return loadPlan(B, key).catch(function(){
+      key = B.profile.plan_default;
+      return loadPlan(B, key);
+    }).then(function(){
+      if (current !== B.profile.id) return;   // se eligio otro dataset mientras cargaba
+      B.planKey = key; rememberPlan(key); paintPlans(B, key); mount(B, key);
+    });
+  }
+
   function open(list, id){
     current = id; paintSelector(list);
     if (!loaded[id]) status('Cargando ' + (list.filter(function(x){ return x.id === id; })[0] || {}).label + '…');
@@ -49,14 +122,14 @@
       .then(function(B){
         loaded[id] = B;
         if (current !== id) return;   // se eligio otro mientras cargaba
-        status(''); remember(id); mount(B);
+        return start(B).then(function(){ if (current === id){ status(''); remember(id); } });
       })
       .catch(function(err){
         if (current === id) status('No se pudieron cargar los datos de este dataset (' + err.message + ').');
       });
   }
 
-  if (INLINE) mount(INLINE);
+  if (INLINE){ current = INLINE.profile.id; start(INLINE); }
   else fetchJSON('datasets.json').then(function(M){ open(M.datasets, initialId(M.datasets)); })
     .catch(function(){
       status(location.protocol === 'file:' ?
@@ -68,28 +141,21 @@
   // Pinta un dataset completo. Cada llamada empieza de cero: los escuchadores
   // de la llamada anterior se quitan con su AbortController y las secciones se
   // vacian, para que nada de un dataset se cuele en el otro.
-  function mount(B){
+  function mount(B, planKey){
   if (ctrl) ctrl.abort();
   ctrl = new AbortController();
   var SIG = {signal: ctrl.signal};
-  var DATA = B.data, META = B.method, PF = B.profile, PL = PF.plan;
+  var DATA = B.data, META = B.method, PF = B.profile;
+  // Lo que cambia con el plan elegido; lo asigna applyPlan().
+  var PL, LEAF, LEAVES, PLAN_TITLE, STATUS_TXT;
 
   document.title = PF.title;
   document.getElementById('title').textContent = PF.title;
   document.getElementById('eyebrow').textContent = PF.eyebrow;
-  ['method', 'provenance', 'ceplan'].forEach(function(id){
+  ['method', 'provenance', 'ceplan', 'summary'].forEach(function(id){
     var s = document.getElementById(id); s.textContent = ''; delete s.dataset.done;
   });
-  var bar = document.getElementById('domains'), anchor = document.getElementById('dom-method');
-  bar.querySelectorAll('[data-unit-dom]').forEach(function(b){ b.remove(); });
-  PF.order.forEach(function(d){
-    var b = document.createElement('button');
-    b.type = 'button'; b.dataset.dom = d; b.dataset.unitDom = '1'; b.textContent = PF.domains[d].tab;
-    bar.insertBefore(b, anchor);
-  });
-  document.getElementById('dom-ceplan').textContent = PL.tab;
-  document.getElementById('omniq').placeholder =
-    'Busca un proyecto, una publicación, un tema o una ' + PL.leaf + ' ' + PL.short + '…';
+  var CH = window.AtlasCharts;
   document.getElementById('atlas').hidden = false;
   document.getElementById('menu').hidden = false;
 
@@ -99,6 +165,28 @@
   });
   var NAMES = {};
   PF.order.forEach(function(d){ NAMES[d] = PF.domains[d].tab; });
+
+  // Cambia el plan sin rehacer la pagina: el cruce de cada dominio pasa a
+  // DATA[d].ceplan y el vocabulario (hoja, nombre, avisos) al del plan nuevo.
+  function applyPlan(key){
+    planKey = key;
+    PL = PF.plans[key];
+    var P = B.plans[key] || {};
+    Object.keys(DATA).forEach(function(d){ DATA[d].ceplan = P[d] || null; });
+    // Las hojas de los planes cargados hoy son femeninas («sub-temática»,
+    // «política»): «Ninguna», «desarrollada».
+    LEAF = PL.leaf; LEAVES = PL.leaves; PLAN_TITLE = cap(LEAVES) + ' del ' + PL.name;
+    STATUS_TXT = {
+      sin_candidatas: 'Ninguna ' + LEAF + ' del ' + PL.name + ' se parece lo suficiente a esta unidad ' +
+        '(similitud bajo el piso). Es lo esperable en investigación básica sin relación con política pública.',
+      rechazadas_por_llm: 'Hubo ' + LEAVES + ' candidatas, pero el verificador no confirmó relación con ninguna.',
+      verificacion_fallida: 'La verificación de esta unidad no produjo una respuesta legible.'
+    };
+    document.getElementById('dom-ceplan').title = PL.tab + ' · ' + PL.name;
+    document.getElementById('omniq').placeholder =
+      'Busca un proyecto, una publicación, un tema o una ' + PL.leaf + ' ' + PL.short + '…';
+  }
+  applyPlan(planKey);
 
   var dom = PF.order[0], mode = 'topic', sel = null, query = '';
   var idx = {};
@@ -169,10 +257,13 @@
     return (vcache[key] = V);
   }
 
-  function cview(d){
-    var key = 'c' + yrKey(d);
+  // Cruce del dominio con el plan, recalculado para el rango de años. Por
+  // defecto el plan elegido; con C y pk, otro plan ya cargado (Resumen).
+  function cview(d, C, pk){
+    pk = pk || planKey; C = C || DATA[d].ceplan;
+    var key = 'c:' + pk + '|' + yrKey(d);
     if (vcache[key]) return vcache[key];
-    var C = DATA[d].ceplan, act = yrActive(), V = {subs: {}, byOn: {}, aligned: 0, nu: 0};
+    var act = yrActive(), V = {subs: {}, byOn: {}, aligned: 0, nu: 0};
     Object.keys(C.subs).forEach(function(k){
       var s = C.subs[k];
       V.subs[k] = act ? {n: 0, n2: 0, eq: 0, cov: 'sin_desarrollo'} : {n: s.n, n2: s.n2, eq: s.eq, cov: s.cov};
@@ -646,17 +737,8 @@
     }
   }
 
-  // Vocabulario del plan nacional del dataset (atlas_profiles.PLANS +
-  // lb_plans.Plan). Las hojas de los planes cargados hoy son femeninas
-  // («sub-temática», «política»): «Ninguna», «desarrollada».
-  var LEAF = PL.leaf, LEAVES = PL.leaves, PLAN_TITLE = cap(LEAVES) + ' del ' + PL.name;
-  var STATUS_TXT = {
-    sin_candidatas: 'Ninguna ' + LEAF + ' del ' + PL.name + ' se parece lo suficiente a esta unidad ' +
-      '(similitud bajo el piso). Es lo esperable en investigación básica sin relación con política pública.',
-    rechazadas_por_llm: 'Hubo ' + LEAVES + ' candidatas, pero el verificador no confirmó relación con ninguna.',
-    verificacion_fallida: 'La verificación de esta unidad no produjo una respuesta legible.'
-  };
-
+  // Vocabulario del plan elegido (atlas_profiles.PLANS + lb_plans.Plan): ver
+  // applyPlan().
   function renderUnitCeplan(box, d, uid){
     var C = DATA[d].ceplan;
     if (!C) return;
@@ -687,7 +769,7 @@
       var lk = el('button', 'linkish', s.l); lk.type = 'button';
       lk.addEventListener('click', function(){ gotoSub(d, r[0]); });
       td.appendChild(lk);
-      td.appendChild(el('span', 'unit-meta', s.o + ' · ' + s.t));
+      td.appendChild(el('span', 'unit-meta', [s.o, s.t].filter(Boolean).join(' · ')));
       tr.appendChild(td);
       var tdg = el('td'); tdg.appendChild(el('span', 'pill g' + r[1], r[1] === 2 ? 'clara' : 'tangencial'));
       tr.appendChild(tdg);
@@ -705,18 +787,43 @@
   var ceplanDom = PF.order[0], ceplanOpen = null, ceplanOnlyGaps = false;
   var COV = {desarrollada: ['dev', 'Desarrollada'], debil: ['weak', 'Débil'], sin_desarrollo: ['none', 'Sin desarrollo']};
 
+  // Pestañas: summary (Resumen), ceplan (Retos), topics (Temas), about. Un
+  // dominio en lugar de una pestaña abre Temas en ese universo.
+  var section = 'summary';
   function showSection(which){
-    document.querySelectorAll('.domains button').forEach(function(o){
-      var want = which === 'ceplan' ? '__ceplan__' : which;
-      o.setAttribute('aria-pressed', String(o.dataset.dom === want));
+    if (DATA[which]) which = 'topics';
+    section = which;
+    document.querySelectorAll('#domains button').forEach(function(o){
+      o.setAttribute('aria-pressed', String(o.dataset.sec === which));
     });
-    var isCeplan = which === 'ceplan';
-    document.getElementById('explorer').hidden = isCeplan;
-    document.getElementById('method').hidden = true;
-    document.getElementById('provenance').hidden = true;
-    document.getElementById('ceplan').hidden = !isCeplan;
-    document.querySelector('.metrics').hidden = isCeplan;
-    document.querySelector('.legend').hidden = isCeplan;
+    ['summary', 'topics', 'ceplan', 'about'].forEach(function(id){
+      document.getElementById(id).hidden = id !== which;
+    });
+    if (which === 'topics') paintTopicDom();
+    CH.hideTip();
+  }
+  function openSection(which){
+    showSection(which);
+    if (which === 'summary') renderSummary();
+    else if (which === 'ceplan') renderCeplan();
+    else if (which === 'about'){ renderMethod(); renderProvenance(); }
+    else { renderMetrics(); renderList(); renderDetail(); }
+  }
+  // Universo dentro de Temas.
+  function paintTopicDom(){
+    var box = document.getElementById('topic-dom');
+    box.textContent = '';
+    box.hidden = PF.order.length < 2;
+    PF.order.forEach(function(d){
+      var b = el('button', null, NAMES[d] || d); b.type = 'button';
+      b.setAttribute('aria-pressed', String(d === dom));
+      b.addEventListener('click', function(){
+        if (d === dom) return;
+        dom = d; sel = null; query = ''; document.getElementById('q').value = '';
+        paintTopicDom(); renderMetrics(); renderList(); renderDetail();
+      });
+      box.appendChild(b);
+    });
   }
 
   function gotoUnit(d, uid){
@@ -733,6 +840,283 @@
     renderCeplan();
     var target = document.getElementById('sub-' + sid);
     if (target) target.scrollIntoView({block: 'center'});
+  }
+
+  // --- Resumen ------------------------------------------------------------------
+  // La portada: cuatro graficos que responden, para el universo y el plan
+  // elegidos, «¿que retos cubre la universidad y cuales no?», «¿desde que
+  // temas?», «¿desde cuando?» y «¿como se ve contra los otros planes?».
+  var sumDom = PF.order[0], sumToken = 0;
+
+  // Rotulo corto de un nivel 1: «ON1 · Alcanzar el pleno desarrollo…», o el
+  // nombre tal cual si ya es corto («Eje Social»).
+  function l1Short(C, key){
+    var lab = C.on[key] || key;
+    if (lab === key) return lab;
+    return key + ' · ' + CH.clip(lab.replace(/^\s*[A-Za-z]+\s*\d+\s*[.:-]?\s*/, ''), 46);
+  }
+  function eqText(d, v){
+    return v.toLocaleString('es', {maximumFractionDigits: 1}) + ' ' + plural(DATA[d].noun) + '-equivalentes';
+  }
+  function slug(s){ return String(s).replace(/[^\w-]+/g, '-'); }
+  // Reparto de una unidad entre los niveles 1 del plan (suma 1 si esta alineada).
+  function l1Shares(C, uid){
+    var sh = {};
+    (C.units[uid] || []).forEach(function(r){
+      var s = C.subs[r[0]]; if (s) sh[s.o] = (sh[s.o] || 0) + r[2];
+    });
+    return sh;
+  }
+  function card(box, title, desc){
+    var c = el('section', 'card');
+    c.appendChild(el('h3', null, title));
+    if (desc) c.appendChild(el('p', 'desc', desc));
+    box.appendChild(c);
+    return c;
+  }
+  function gotoOn(d, on){
+    ceplanDom = d; ceplanOpen = null; ceplanOnlyGaps = false;
+    showSection('ceplan'); renderCeplan();
+    var t = document.getElementById('on-' + slug(on));
+    if (t) t.scrollIntoView({block: 'start'});
+  }
+
+  function renderSummary(){
+    var box = document.getElementById('summary');
+    box.textContent = ''; CH.hideTip();
+    var token = ++sumToken;
+    var d = sumDom, D = DATA[d], C = D.ceplan, V = view(d), act = yrActive();
+
+    if (PF.order.length > 1){
+      var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
+      PF.order.forEach(function(x){
+        var b = el('button', null, NAMES[x] || x); b.type = 'button';
+        b.setAttribute('aria-pressed', String(x === d));
+        b.addEventListener('click', function(){ if (x !== sumDom){ sumDom = x; renderSummary(); } });
+        seg.appendChild(b);
+      });
+      box.appendChild(seg);
+    }
+    yrBanner(box, d, V.nu, D.nu);
+
+    // cifras de cabecera
+    var CV = C ? cview(d) : null, ids = C ? Object.keys(C.subs) : [];
+    var cnt = {desarrollada: 0, debil: 0, sin_desarrollo: 0};
+    ids.forEach(function(k){ cnt[CV.subs[k].cov]++; });
+    var tiles = [[cap(plural(D.noun)), V.nu.toLocaleString('es'),
+                  act ? 'de ' + D.nu.toLocaleString('es') + ' · años ' + yrText() : 'en el análisis'],
+                 ['Temas', V.nt.toLocaleString('es'), 'propios de este universo']];
+    if (C){
+      tiles.push(['Alineados con ' + PL.short, pct(CV.nu ? CV.aligned / CV.nu : 0, 0),
+                  CV.aligned.toLocaleString('es') + ' de ' + CV.nu.toLocaleString('es') +
+                  ' con al menos una ' + LEAF + ' confirmada']);
+      tiles.push([cap(LEAVES) + ' desarrolladas', cnt.desarrollada + ' de ' + ids.length,
+                  cnt.debil + ' débiles · ' + cnt.sin_desarrollo + ' sin desarrollo']);
+    }
+    var dl = el('dl', 'metrics kpis');
+    tiles.forEach(function(t){
+      var w = el('div', 'metric');
+      w.appendChild(el('dt', null, t[0]));
+      var dd = el('dd', null, t[1]); dd.appendChild(el('span', 'note', t[2]));
+      w.appendChild(dd); dl.appendChild(w);
+    });
+    box.appendChild(dl);
+
+    if (!C){
+      box.appendChild(el('p', 'note', 'Todavía no hay un cruce de ' + plural(D.noun) + ' con ' + PL.short +
+        ' (scripts/analysis/ceplan_units.py --plan ' + PL.key + '). Elige otro plan en «Retos», arriba.'));
+      renderCompare(box, d, token);
+      return;
+    }
+    var onKeys = Object.keys(C.on).sort();
+
+    // 1. mapa de cobertura
+    var c1 = card(box, 'Qué ' + LEAVES + ' del ' + PL.name + ' cubren los ' + plural(D.noun),
+      'Cada cuadro es una ' + LEAF + '. Oscuro: la desarrollan con claridad al menos ' + C.minG2 + ' ' +
+      plural(D.noun) + '; claro: menos; hueco: ninguna relación clara. Pasa el puntero para ver el detalle ' +
+      'y haz clic para abrir la ' + LEAF + ' en «Retos».');
+    var groups = onKeys.map(function(on){
+      return {key: on, label: C.on[on], cells: ids.filter(function(k){ return C.subs[k].o === on; })
+        .map(function(k){
+          var s = C.subs[k], sv = CV.subs[k];
+          return {id: k, label: s.l, cov: sv.cov, eq: sv.eq,
+                  lines: [sv.n2 + ' con relación clara · ' + (sv.n - sv.n2) + ' tangenciales', eqText(d, sv.eq)]};
+        })};
+    });
+    CH.coverageGrid(c1, groups, {covText: {desarrollada: 'Desarrollada', debil: 'Débil',
+                                           sin_desarrollo: 'Sin desarrollo'},
+                                 onClick: function(k){ gotoSub(d, k); }});
+    CH.tableView(c1, [PL.level1_long, cap(LEAF), 'Estado', 'Relación clara', 'Tangencial', 'Equivalentes'],
+      groups.reduce(function(acc, g){
+        return acc.concat(g.cells.map(function(c){
+          var sv = CV.subs[c.id];
+          return [l1Short(C, g.key), c.label, COV[c.cov][1], sv.n2, sv.n - sv.n2, sv.eq.toFixed(1)];
+        }));
+      }, []), [0, 0, 0, 1, 1, 1]);
+
+    // 2. de los temas a los objetivos
+    var I = build(d), flow = {}, units = 0;
+    Object.keys(C.units).forEach(function(u){
+      if (!inYears(d, u)) return;
+      var sh = l1Shares(C, u), byT = I.byUnit[u] || [];
+      if (byT.length) units++;
+      byT.forEach(function(c){
+        Object.keys(sh).forEach(function(o){
+          (flow[c.t] = flow[c.t] || {})[o] = (flow[c.t][o] || 0) + c.c * sh[o];
+        });
+      });
+    });
+    var tTot = Object.keys(flow).map(function(t){
+      return [t, Object.keys(flow[t]).reduce(function(a, o){ return a + flow[t][o]; }, 0)]; })
+      .sort(function(a, b){ return b[1] - a[1]; });
+    // Solo los temas que mas aportan: un nodo «otros» con el resto se comia
+    // casi todo el alto y dejaba a los temas mostrados en hilos.
+    var TOP = 12, top = tTot.slice(0, TOP), rest = tTot.slice(TOP);
+    var flows = [], OTHER = '__otros__';
+    top.forEach(function(x){
+      Object.keys(flow[x[0]]).forEach(function(o){ flows.push({s: x[0], t: o, v: flow[x[0]][o]}); }); });
+    var all = tTot.reduce(function(a, x){ return a + x[1]; }, 0) || 1;
+    var shownShare = top.reduce(function(a, x){ return a + x[1]; }, 0) / all;
+    if (flows.length){
+      var c2 = card(box, 'De los temas a los ' + PL.level1_plural,
+        'Los ' + top.length + ' temas que más aportan a ' + PL.cross + ' (juntos, el ' + pct(shownShare, 0) +
+        ' del aporte de los ' + tTot.length + ' temas), y hacia dónde va ese aporte. El grosor es ' +
+        'cuánto de los ' + plural(D.noun) + ' es ese tema y, a la vez, ese ' + PL.level1_long.toLowerCase() +
+        ' (la proporción del tema en cada unidad por la de su alineación con el plan). Clic en un tema ' +
+        'para abrirlo; en un ' + PL.level1_long.toLowerCase() + ', para verlo en «Retos».');
+      var left = top.map(function(x){ return {id: x[0], label: (D.topics[x[0]] || {}).l || x[0], value: x[1]}; });
+      var right = onKeys.map(function(o){
+        return {id: o, label: l1Short(C, o), note: C.on[o],
+                value: flows.reduce(function(a, f){ return a + (f.t === o ? f.v : 0); }, 0)}; })
+        .filter(function(r){ return r.value > 0; });
+      CH.sankey(c2, {left: left, right: right, flows: flows,
+        fmt: function(v){ return eqText(d, v); },
+        aria: 'Flujo de los temas a los ' + PL.level1_plural + ' del ' + PL.name,
+        onLeft: function(id){ if (id !== OTHER) gotoTopic(d, id); },
+        onRight: function(id){ gotoOn(d, id); }});
+      // La tabla trae todos los temas, no solo los del grafico.
+      var allFlows = [];
+      tTot.forEach(function(x){
+        Object.keys(flow[x[0]]).forEach(function(o){ allFlows.push({s: x[0], t: o, v: flow[x[0]][o]}); }); });
+      CH.tableView(c2, ['Tema', PL.level1_long, 'Equivalentes'],
+        allFlows.sort(function(a, b){ return b.v - a.v; }).map(function(f){
+          return [(D.topics[f.s] || {}).l || f.s, l1Short(C, f.t), f.v.toFixed(2)];
+        }), [0, 0, 1]);
+    }
+
+    // 3. evolucion por año
+    var per = {}, years = [], noYear = 0;
+    Object.keys(C.units).forEach(function(u){
+      if (!inYears(d, u)) return;
+      var y = (D.units[u] || {}).y;
+      if (!y){ noYear++; return; }
+      years.push(y);
+      var sh = l1Shares(C, u);
+      Object.keys(sh).forEach(function(o){ (per[o] = per[o] || {})[y] = (per[o][y] || 0) + sh[o]; });
+    });
+    if (years.length){
+      var lo = Math.min.apply(null, years), hi = Math.max.apply(null, years);
+      if (hi > lo){
+        var c3 = card(box, 'Por año, en cada ' + PL.level1_long.toLowerCase(),
+          'Cuántos ' + plural(D.noun) + '-equivalentes aporta cada año a cada ' + PL.level1_long.toLowerCase() +
+          ': cada unidad reparte 1 entre sus ' + LEAVES + '. Misma escala en todos los paneles.' +
+          (noYear ? ' ' + noYear + ' ' + plural(D.noun) + ' sin año no entran.' : ''));
+        CH.smallMultiples(c3, {years: [lo, hi], fmt: function(v){ return eqText(d, v); },
+          panels: onKeys.map(function(o){ return {id: o, label: l1Short(C, o), values: per[o] || {}}; }),
+          onPanel: function(o){ gotoOn(d, o); }});
+        var yrs = []; for (var y = lo; y <= hi; y++) yrs.push(y);
+        CH.tableView(c3, ['Año'].concat(onKeys.map(function(o){ return l1Short(C, o); })),
+          yrs.map(function(y){
+            return [String(y)].concat(onKeys.map(function(o){ return ((per[o] || {})[y] || 0).toFixed(1); }));
+          }), [0].concat(onKeys.map(function(){ return 1; })));
+      }
+    }
+
+    // 4. comparar planes
+    renderCompare(box, d, token);
+  }
+
+  // Todos los planes de este dataset contra el mismo universo y años. Carga
+  // los planes que falten; si mientras tanto se volvio a pintar, no hace nada.
+  function renderCompare(box, d, token){
+    if (PF.plan_order.length < 2) return;
+    var D = DATA[d];
+    var c = card(box, 'Comparar retos',
+      'El mismo universo contra cada plan: qué parte de los ' + plural(D.noun) + ' tiene al menos una ' +
+      'relación confirmada con el plan. Clic en un plan para elegirlo.');
+    var wait = el('p', 'note', 'Cargando los otros planes…'); c.appendChild(wait);
+    Promise.all(PF.plan_order.map(function(k){
+      return loadPlan(B, k).then(function(){ return true; }, function(){ return false; });
+    })).then(function(){
+      if (token !== sumToken) return;
+      wait.remove();
+      var rows = [], tableRows = [], alignedAny = {}, nu = 0, crossed = 0;
+      PF.plan_order.forEach(function(k){
+        var Ck = (B.plans[k] || {})[d], P = PF.plans[k];
+        if (!Ck){
+          rows.push({id: k, label: P.name, sub: 'sin cruce para este universo todavía', value: 0, text: '—',
+                     current: k === planKey});
+          tableRows.push([P.name, '—', '—']);
+          return;
+        }
+        crossed++;
+        var CVk = cview(d, Ck, k), ids = Object.keys(Ck.subs);
+        var dev = ids.filter(function(s){ return CVk.subs[s].cov === 'desarrollada'; }).length;
+        nu = CVk.nu;
+        Object.keys(Ck.units).forEach(function(u){ if (inYears(d, u)) alignedAny[u] = 1; });
+        var share = CVk.nu ? CVk.aligned / CVk.nu : 0;
+        rows.push({id: k, label: P.name, value: share, text: pct(share, 0), current: k === planKey,
+                   sub: dev + ' de ' + ids.length + ' ' + P.leaves + ' desarrolladas' +
+                        (P.validated ? '' : ' · sin revisión manual'),
+                   onClick: k === planKey ? null : function(){ choosePlan(B, k); }});
+        tableRows.push([P.name, pct(share, 1), dev + ' de ' + ids.length]);
+      });
+      CH.meterList(c, rows);
+      if (crossed > 1){
+        var none = nu - Object.keys(alignedAny).length;
+        c.appendChild(el('p', 'note', none.toLocaleString('es') + ' ' + plural(D.noun) +
+          ' no tienen relación confirmada con ninguno de estos planes.'));
+      }
+      CH.tableView(c, ['Plan', '% alineado', cap('hojas desarrolladas')], tableRows, [0, 1, 1]);
+    });
+  }
+
+  // Perfil de cada agrupacion (departamento, linea de investigacion) entre los
+  // niveles 1 del plan: cada fila suma 100 %. Solo proyectos: en publicaciones
+  // la agrupacion es la revista, que no dice nada de quien investiga.
+  function renderGroupHeat(box, d){
+    var D = DATA[d], C = D.ceplan;
+    if (D.kind !== 'projects') return;
+    var groupName = (PF.domains[d] || {}).group || 'Agrupación';
+    var acc = {}, n = {};
+    Object.keys(C.units).forEach(function(u){
+      if (!inYears(d, u)) return;
+      var g = (D.units[u] || {}).g;
+      if (!g) return;
+      var sh = l1Shares(C, u);
+      acc[g] = acc[g] || {}; n[g] = (n[g] || 0) + 1;
+      Object.keys(sh).forEach(function(o){ acc[g][o] = (acc[g][o] || 0) + sh[o]; });
+    });
+    var gs = Object.keys(n).sort(function(a, b){ return n[b] - n[a]; });
+    if (gs.length < 2) return;
+    var MAXR = 15, shown = gs.slice(0, MAXR);
+    var onKeys = Object.keys(C.on).sort();
+    var sec = el('div', 'heat-block');
+    sec.appendChild(el('h3', 'sub-h', 'Perfil por ' + groupName.toLowerCase()));
+    sec.appendChild(el('p', 'desc', 'Cómo reparte cada ' + groupName.toLowerCase() + ' su alineación entre ' +
+      'los ' + PL.level1_plural + ' (cada fila suma 100 %). Más oscuro, más peso.' +
+      (gs.length > MAXR ? ' Se muestran las ' + MAXR + ' con más ' + plural(D.noun) + ' alineados, de ' + gs.length + '.' : '')));
+    function tot(g){ return onKeys.reduce(function(a, o){ return a + (acc[g][o] || 0); }, 0) || 1; }
+    CH.heatmap(sec, {rowName: groupName,
+      rows: shown.map(function(g){ return {id: g, label: g, note: n[g] + ' ' + plural(D.noun)}; }),
+      cols: onKeys.map(function(o){ return {id: o, label: o === C.on[o] ? CH.clip(o, 22) : o, full: C.on[o]}; }),
+      val: function(r, c){ return (acc[r.id][c.id] || 0) / tot(r.id); },
+      fmt: function(v){ return pct(v, 0) + ' de su alineación'; }});
+    CH.tableView(sec, [groupName, cap(plural(D.noun))].concat(onKeys.map(function(o){ return l1Short(C, o); })),
+      gs.map(function(g){
+        return [g, String(n[g])].concat(onKeys.map(function(o){ return pct((acc[g][o] || 0) / tot(g), 0); }));
+      }), [0, 1].concat(onKeys.map(function(){ return 1; })));
+    box.appendChild(sec);
   }
 
   function renderCeplan(){
@@ -752,7 +1136,10 @@
     box.appendChild(el('p', 'desc', 'Qué ' + LEAVES + ' ' + PL.source + ' (' +
       Object.keys(C.on).length + ' ' + PL.level1_plural + ', ' + subsArr.length + ' ' + LEAVES +
       ') desarrolla cada ' + D.noun + ', y quién desarrolla cada ' + LEAF + '.'));
-    
+    // Cuanto se puede confiar en este cruce: la revision manual vale solo para
+    // el dataset con el que se hizo, y un plan de otro pais se juzga por tema.
+    if (PL.foreign) box.appendChild(el('p', 'note', PL.foreign));
+    if (PL.validation) box.appendChild(el('p', 'note', PL.validation));
 
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Universo');
     avail.forEach(function(d){
@@ -781,13 +1168,15 @@
     });
     tbl.appendChild(tb); wrap.appendChild(tbl); box.appendChild(wrap);
 
+    renderGroupHeat(box, ceplanDom);
+
     // ON -> Tematica -> Sub-tematica
     Object.keys(C.on).sort().forEach(function(on){
       var ids = subsArr.filter(function(k){
         return C.subs[k].o === on && (!ceplanOnlyGaps || CV.subs[k].cov !== 'desarrollada');
       });
       if (!ids.length) return;
-      var blk = el('div', 'on-block');
+      var blk = el('div', 'on-block'); blk.id = 'on-' + slug(on);
       blk.appendChild(el('h4', null, C.on[on]));
       var dev = ids.filter(function(k){ return CV.subs[k].cov === 'desarrollada'; }).length;
       blk.appendChild(el('p', 'on-sum', ids.length + ' ' + LEAVES +
@@ -795,7 +1184,7 @@
       var temas = {};
       ids.forEach(function(k){ (temas[C.subs[k].t] = temas[C.subs[k].t] || []).push(k); });
       Object.keys(temas).sort().forEach(function(t){
-        blk.appendChild(el('div', 'tema-h', t));
+        if (t) blk.appendChild(el('div', 'tema-h', t));   // un plan de dos niveles no tiene nivel 2
         temas[t].sort(function(a, b){ return CV.subs[b].eq - CV.subs[a].eq; }).forEach(function(k){
           blk.appendChild(subRow(ceplanDom, k));
         });
@@ -863,25 +1252,16 @@
     return det;
   }
 
-  document.querySelectorAll('.domains button').forEach(function(b){
+  document.querySelectorAll('#domains button').forEach(function(b){
+    b.addEventListener('click', function(){ openSection(b.dataset.sec); }, SIG);
+  });
+  // «Acerca de los datos»: Metodología y Datos de origen, uno a la vez.
+  document.querySelectorAll('#about-nav button').forEach(function(b){
     b.addEventListener('click', function(){
-      document.querySelectorAll('.domains button').forEach(function(o){
+      document.querySelectorAll('#about-nav button').forEach(function(o){
         o.setAttribute('aria-pressed', String(o === b)); });
-      var isMethod = b.dataset.dom === '__method__';
-      var isProvenance = b.dataset.dom === '__provenance__';
-      var isCeplan = b.dataset.dom === '__ceplan__';
-      var isSpecial = isMethod || isProvenance || isCeplan;
-      document.getElementById('explorer').hidden = isSpecial;
-      document.getElementById('method').hidden = !isMethod;
-      document.getElementById('provenance').hidden = !isProvenance;
-      document.getElementById('ceplan').hidden = !isCeplan;
-      document.querySelector('.metrics').hidden = isSpecial;
-      document.querySelector('.legend').hidden = isSpecial;
-      if (isMethod){ renderMethod(); return; }
-      if (isProvenance){ renderProvenance(); return; }
-      if (isCeplan){ renderCeplan(); return; }
-      dom = b.dataset.dom; sel = null; query=''; document.getElementById('q').value='';
-      renderMetrics(); renderList(); renderDetail();
+      document.getElementById('method').hidden = b.dataset.about !== 'method';
+      document.getElementById('provenance').hidden = b.dataset.about !== 'provenance';
     }, SIG);
   });
   document.getElementById('q').addEventListener('input', function(e){
@@ -905,8 +1285,9 @@
 
   // Vuelve a pintar lo que este a la vista cuando cambia el rango de años.
   function rerender(){
-    if (!document.getElementById('explorer').hidden){ renderMetrics(); renderList(); renderDetail(); }
-    if (!document.getElementById('ceplan').hidden) renderCeplan();
+    if (section === 'topics'){ renderMetrics(); renderList(); renderDetail(); }
+    if (section === 'ceplan') renderCeplan();
+    if (section === 'summary') renderSummary();
     if (!omniRes.hidden) omniRender();
     var parts = [];
     if (yrActive()) Object.keys(DATA).forEach(function(d){
@@ -981,18 +1362,24 @@
                    meta: (NAMES[d] || d), extra: fold(t.d)});
       });
     });
-    GROUPS.push({key: 's', label: cap(LEAVES) + ' ' + PL.short, kind: 's'});
+    GROUPS.push({key: 's', label: '', kind: 's'});
+    omniPlan();
+  })();
+  // Las hojas del plan elegido; se rehace al cambiar de plan.
+  function omniPlan(){
+    OMNI = OMNI.filter(function(e){ return e.g !== 's'; });
+    GROUPS.forEach(function(G){ if (G.key === 's') G.label = cap(LEAVES) + ' ' + PL.short; });
     var seen = {};
     Object.keys(DATA).forEach(function(d){
       var C = DATA[d].ceplan; if (!C) return;
       Object.keys(C.subs).forEach(function(id){
         if (seen[id]) return; seen[id] = 1;
-        var s = C.subs[id];
+        var s = C.subs[id], ctx = [C.on[s.o] || s.o, s.t].filter(Boolean).join(' · ');
         OMNI.push({g: 's', kind: 's', d: d, id: id, title: s.l, ft: foldAligned(s.l),
-                   meta: (C.on[s.o] || s.o) + ' · ' + s.t, extra: fold(s.t + ' ' + (C.on[s.o] || '') + ' ' + s.o)});
+                   meta: ctx, extra: fold(s.t + ' ' + (C.on[s.o] || '') + ' ' + s.o)});
       });
     });
-  })();
+  }
 
   // Prefijos para acotar: "p:" proyectos, "pub:" publicaciones, "t:" temas,
   // "s:" (o el nombre del plan) hojas del plan. Un año (2015) o rango
@@ -1177,15 +1564,33 @@
     }
   }, SIG);
 
-  // Estado inicial: el primer universo, con su tema mas grande ya abierto,
-  // para que la pagina se lea de entrada.
-  showSection(dom);
-  renderMetrics();
+  // Estado inicial: el Resumen. Temas queda listo con el primer universo y su
+  // tema mas grande abierto, para que se lea de entrada al cambiar de pestaña.
   (function(){
     var D = DATA[dom];
     var top = Object.keys(D.topics).sort(function(a,b){ return D.topics[b].eq - D.topics[a].eq; })[0];
     sel = {kind:'t', id:top};
   })();
-  renderList(); renderDetail();
+  document.querySelectorAll('#about-nav button').forEach(function(o){
+    o.setAttribute('aria-pressed', String(o.dataset.about === 'method')); });
+  document.getElementById('method').hidden = false;
+  document.getElementById('provenance').hidden = true;
+  renderMetrics(); renderList(); renderDetail();
+  openSection('summary');
+
+  // Cambio de plan desde el selector de la cabecera: se queda en la misma
+  // pestaña, con la misma seleccion y el mismo rango de años.
+  planHook = function(key){
+    applyPlan(key);
+    omniPlan();
+    ceplanOpen = null;
+    var m = document.getElementById('method');
+    m.textContent = ''; delete m.dataset.done;   // nombra el plan y su verificador
+    if (section === 'topics') renderDetail();
+    if (section === 'ceplan') renderCeplan();
+    if (section === 'summary') renderSummary();
+    if (section === 'about') renderMethod();
+    if (!omniRes.hidden) omniRender();
+  };
   }
 })();

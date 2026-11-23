@@ -22,17 +22,22 @@
       <span class="lbl" id="ds-lbl">Dataset</span>
       <div class="seg" id="ds" role="group" aria-labelledby="ds-lbl"></div>
     </div>
+    <div class="datasets" id="plansel" hidden>
+      <span class="lbl" id="plan-lbl">Retos</span>
+      <div class="seg" id="plans" role="group" aria-labelledby="plan-lbl"></div>
+    </div>
   </div>
 </header>
 
-<!-- Los botones de cada universo los pone mount() segun el dataset, y es mount()
-     quien muestra la banda. -->
-<nav class="menu" id="menu" aria-label="Universo a explorar" hidden>
+<!-- Cuatro pestañas fijas; el universo (proyectos / publicaciones) se elige
+     dentro de cada una. mount() muestra la banda. -->
+<nav class="menu" id="menu" aria-label="Secciones del atlas" hidden>
   <div class="wrap">
-    <div class="domains" id="domains" role="group" aria-label="Universo a explorar">
-      <button type="button" id="dom-method" data-dom="__method__" aria-pressed="false">Metodología</button>
-      <button type="button" id="dom-provenance" data-dom="__provenance__" aria-pressed="false">Datos de origen</button>
-      <button type="button" id="dom-ceplan" data-dom="__ceplan__" aria-pressed="false">Objetivos Nacionales</button>
+    <div class="domains" id="domains" role="group" aria-label="Secciones del atlas">
+      <button type="button" data-sec="summary" aria-pressed="false">Resumen</button>
+      <button type="button" data-sec="ceplan" id="dom-ceplan" aria-pressed="false">Retos</button>
+      <button type="button" data-sec="topics" aria-pressed="false">Temas</button>
+      <button type="button" data-sec="about" aria-pressed="false">Acerca de los datos</button>
     </div>
   </div>
 </nav>
@@ -70,6 +75,10 @@
     <div class="omni-res" id="omni-res" role="listbox" aria-label="Resultados" hidden></div>
   </div>
 
+  <section id="summary" hidden></section>
+
+  <div id="topics" hidden>
+  <div class="seg" id="topic-dom" role="group" aria-label="Universo"></div>
   <dl class="metrics" id="metrics"></dl>
 
   <div class="legend">
@@ -102,9 +111,17 @@
     </div>
   </div>
 
-  <section class="method" id="method" hidden></section>
-  <section class="method" id="provenance" hidden></section>
+  </div>
+
   <section class="method" id="ceplan" hidden></section>
+  <div id="about" hidden>
+    <div class="seg" id="about-nav" role="group" aria-label="Apartado">
+      <button type="button" data-about="method" aria-pressed="true">Metodología</button>
+      <button type="button" data-about="provenance" aria-pressed="false">Datos de origen</button>
+    </div>
+    <section class="method" id="method"></section>
+    <section class="method" id="provenance" hidden></section>
+  </div>
   </div>
 </main>
 
@@ -116,5 +133,6 @@
 </footer>
 
 <script id="bundle" type="application/json">__BUNDLE__</script>
+<script src="atlas-charts.js"></script>
 <script src="atlas.js"></script>
 </html>

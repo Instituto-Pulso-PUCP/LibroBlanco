@@ -16,13 +16,20 @@ editar a mano.
         --run ecotec_projects=ecotec-proj-20261028 \
         --run ecotec_publications=ecotec-pubs-20261028
 
-El dataset sale de los dominios (lb_domains.Domain.dataset). Salidas:
+El dataset sale de los dominios (lb_domains.Domain.dataset). Los planes son
+todos los de atlas_profiles.PLANS con los que ya se cruzo alguna de las corridas
+(scripts/analysis/ceplan_units.py --plan ...: el archivo 07_<prefijo>_units.json
+de la corrida); se abre primero el plan por defecto de los dominios. Salidas:
 
-    salidas/topics/atlas/index.html        la pagina, con selector de dataset
-    salidas/topics/atlas/datasets.json     que datasets hay (se actualiza, no se pisa)
-    salidas/topics/atlas/data/<id>.json    numeros y textos de un dataset
-    salidas/topics/atlas_<id>.html         archivo unico con ese dataset incrustado,
-                                           para abrir sin servidor (sin selector)
+    salidas/topics/atlas/index.html        la pagina, con selector de dataset y de plan
+    salidas/topics/atlas/datasets.json     que datasets y planes hay (se actualiza, no se pisa)
+    salidas/topics/atlas/data/<id>.json    numeros y textos de un dataset, sin los planes
+    salidas/topics/atlas/data/<id>/<plan>.json
+                                           cruce de ese dataset con un plan; la pagina lo
+                                           carga cuando se elige el plan
+    salidas/topics/atlas_<id>.html         archivo unico con ese dataset y todos sus planes
+                                           incrustados, para abrir sin servidor (sin selector
+                                           de dataset)
 
 Publicar en el servidor (nginx, http://44.195.204.129/): deploy_atlas.sh, ver
 docs/servidor_atlas.md. Para ver la carpeta en local: serve_atlas.py. Abierta
@@ -168,17 +175,17 @@ def examples(cfg, store, rows, topics, units, raw_topics):
     return {"main": main_cell, "big": describe(big), "small": describe(small)}
 
 
-def ceplan_block(domain: str, run_id: str) -> dict | None:
-    """Cruce unidad <-> hoja del plan nacional del dominio
-    (scripts/analysis/ceplan_units.py), si ya se corrio para este run. Sin ese
-    archivo la pestaña del plan muestra un aviso en vez de romperse: el cruce es
-    aparte, no una etapa obligatoria del pipeline.
+def ceplan_block(domain: str, run_id: str, plan_key: str) -> dict | None:
+    """Cruce unidad <-> hoja de un plan (scripts/analysis/ceplan_units.py), si
+    ya se corrio para este run y este plan. Sin ese archivo la pestaña del plan
+    muestra un aviso en vez de romperse: el cruce es aparte, no una etapa
+    obligatoria del pipeline.
 
     Formato compacto: ``subs[sid] = {l, t, o, cov, n, n2, eq}`` y
     ``units[uid] = [[sid, grado, contencion, contribucion], ...]`` con todos
     los vinculos confirmados ordenados por contencion; ``top`` dice cuantos se
     listan por unidad."""
-    prefix = lb_plans.get(lb_domains.get(domain).plan).file_prefix
+    prefix = lb_plans.get(plan_key).file_prefix
     path = ROOT / "salidas" / "topics" / domain / run_id / f"07_{prefix}_units.json"
     if not path.exists():
         return None
@@ -272,8 +279,28 @@ def collect(cfg, domain: str, run_id: str) -> dict:
             "mt": round(partition.get("mean_effective_topics_per_unit") or 0, 2),
             "mu": round(partition.get("mean_effective_units_per_topic") or 0, 1),
             "nu": partition.get("num_units_in_partition") or len(units),
-            "nt": partition.get("num_topics_in_partition") or len(topics),
-            "ceplan": ceplan_block(domain, run_id)}
+            "nt": partition.get("num_topics_in_partition") or len(topics)}
+
+
+def plan_blocks(runs: dict[str, str]) -> tuple[dict[str, dict], str]:
+    """({plan: {dominio: bloque | None}}, plan por defecto) para estas corridas.
+
+    Entran los planes de atlas_profiles.PLANS con el cruce hecho para al menos
+    una corrida, en ese orden, y siempre el plan por defecto de los dominios
+    (aunque no tenga cruce: la pestaña lo avisa)."""
+    default = lb_domains.get(next(iter(runs))).plan
+    out = {}
+    for key in atlas_profiles.PLANS:
+        blocks = {d: ceplan_block(d, run_id, key) for d, run_id in runs.items()}
+        if key == default or any(blocks.values()):
+            out[key] = blocks
+    for key in sorted(set(lb_plans.PLANS) - set(atlas_profiles.PLANS)):
+        prefix = lb_plans.get(key).file_prefix
+        if any((ROOT / "salidas" / "topics" / d / r / f"07_{prefix}_units.json").exists()
+               for d, r in runs.items()):
+            print(f"  aviso: hay cruce con el plan {key!r} pero no esta en atlas_profiles.PLANS; "
+                  "no se muestra.")
+    return out, default
 
 
 def coverage(domain: str, run_unit_ids: set[str] | None = None) -> dict:
@@ -370,10 +397,10 @@ def main():
             raise SystemExit(f"--run mal formado: {pair!r}. Formato: dominio=run_id")
         runs[domain] = run_id
     specs = [lb_domains.get(d) for d in runs]
-    datasets, plans = {s.dataset for s in specs}, {s.plan for s in specs}
-    if len(datasets) != 1 or len(plans) != 1:
-        raise SystemExit(f"Un atlas por dataset: estas corridas mezclan {sorted(datasets)} / "
-                         f"{sorted(plans)}. Correr una vez por dataset.")
+    datasets = {s.dataset for s in specs}
+    if len(datasets) != 1:
+        raise SystemExit(f"Un atlas por dataset: estas corridas mezclan {sorted(datasets)}. "
+                         "Correr una vez por dataset.")
     dataset = datasets.pop()
 
     cfg = lb_config.load()
@@ -384,24 +411,40 @@ def main():
         print(f"  {domain:22s} {len(data[domain]['topics'])} temas · "
               f"{len(data[domain]['units'])} unidades · {len(data[domain]['cells']):,} celdas")
 
-    profile = atlas_profiles.page_profile(dataset, list(runs), lb_plans.get(plans.pop()))
+    plans, default = plan_blocks(runs)
+    for key, blocks in plans.items():
+        crossed = [d for d, b in blocks.items() if b]
+        print(f"  plan {key:14s} " + (", ".join(crossed) if crossed else "sin cruce todavia")
+              + (" (por defecto)" if key == default else ""))
+    profile = atlas_profiles.page_profile(dataset, list(runs),
+                                          [lb_plans.get(k) for k in plans], default)
     bundle = {"profile": profile, "data": data, "method": method}
+
+    def dump(path: Path, obj):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     out = args.out_dir.resolve()
     data_path = out / "data" / f"{dataset}.json"
-    data_path.parent.mkdir(parents=True, exist_ok=True)
-    data_path.write_text(json.dumps(bundle, ensure_ascii=False, separators=(",", ":")),
-                         encoding="utf-8")
+    dump(data_path, bundle)
+    plan_dir = out / "data" / dataset
+    for key, blocks in plans.items():
+        dump(plan_dir / f"{key}.json", blocks)
+    for stale in plan_dir.glob("*.json"):
+        if stale.stem not in plans:
+            stale.unlink()
     update_manifest(out / "datasets.json", {
         "id": dataset, "label": profile["label"], "title": profile["title"], "runs": runs,
+        "plans": list(plans), "plan": default,
         "built": datetime.date.today().isoformat()})
     write_page(out / "index.html", None)
     standalone = out.parent / f"atlas_{dataset}.html"
-    size = write_page(standalone, bundle)
+    size = write_page(standalone, {**bundle, "plans": plans})
 
     def rel(path: Path) -> Path:
         return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
     print(f"\n-> {rel(data_path)}  ({data_path.stat().st_size/1e6:.2f} MB)")
+    print(f"-> {rel(plan_dir)}/ (" + ", ".join(k + ".json" for k in plans) + ")")
     print(f"-> {rel(out / 'index.html')} + datasets.json")
     print(f"-> {rel(standalone)}  ({size/1e6:.2f} MB, archivo unico)")
     print("Publicar en el servidor: ./scripts/analysis/deploy_atlas.sh (docs/servidor_atlas.md).")

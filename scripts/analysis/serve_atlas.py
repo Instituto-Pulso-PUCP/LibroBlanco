@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Servidor local para trabajar en la plantilla del Atlas Temático.
 
-Sirve la pagina de templates/atlas/ (index.html, atlas.css, atlas.js) armada
+Sirve la pagina de templates/atlas/ (index.html, atlas.css, atlas-charts.js,
+atlas.js) armada
 de nuevo en cada pedido por atlas_page.py, igual que el index.html que escribe
 build_atlas.py, y los datos ya construidos de salidas/topics/atlas/. Editar
-cualquiera de los tres archivos, guardar y recargar el navegador: no hace falta
+cualquiera de esos archivos, guardar y recargar el navegador: no hace falta
 volver a construir.
 
     python scripts/analysis/serve_atlas.py          # http://localhost:8000/?ds=ecotec
 
-Los datos (datasets.json, data/<id>.json) salen de build_atlas.py, que necesita
+Los datos (datasets.json, data/<id>.json y data/<id>/<plan>.json) salen de build_atlas.py, que necesita
 RDS: se construyen en el servidor y se copian a salidas/topics/atlas/. Solo hay
 que traerlos de nuevo si cambian las corridas o atlas_profiles.py.
 """

@@ -8,8 +8,8 @@ no un efecto lateral de compartir tabla.
 
 Anadir un dataset nuevo = un adaptador en scripts/datasets/ que escriba los
 CSV estandar (projects / publications / links / policies), una entrada aqui
-por cada dominio, su plan nacional en lb_plans y el valor del enum en RDS
-(sql/migrations/). El resto del pipeline (extraccion, normalizacion,
+por cada dominio, su institucion en DATASETS, su plan por defecto en lb_plans
+y el valor del enum en RDS (sql/migrations/). El resto del pipeline (extraccion, normalizacion,
 cuantificacion, reportes, cruce con el plan) no cambia.
 """
 
@@ -61,7 +61,9 @@ class Domain:
     kind: str = "projects"             # "projects" | "publications"
     short_label: str = ""              # "Proyectos", para titulos de reportes
     noun: str = ""                     # "proyectos", para frases
-    # Plan nacional contra el que se cruzan las unidades (clave de lb_plans).
+    # Plan contra el que se cruzan las unidades POR DEFECTO (clave de
+    # lb_plans). Cualquier dominio se puede cruzar con cualquier plan:
+    # ceplan_units.py --plan <clave>.
     plan: str = "pedn2050"
 
     # --- Texto auxiliar: filas de otro CSV unidas por clave ----------------
@@ -82,6 +84,28 @@ class Domain:
     # cuando la segunda ya es una descripcion completa por si sola.
     aux_primary_columns: list[str] = field(default_factory=list)
     aux_min_primary_chars: int = 0
+
+
+@dataclass(frozen=True)
+class Dataset:
+    """La institucion detras de un dataset. El pais y el gentilicio van en el
+    prompt del verificador del cruce con un plan (lb_plans.Plan.judge_system):
+    sin tildes, como el resto de ese prompt."""
+    label: str                 # "PUCP"
+    country: str               # "Peru"
+    demonym: str               # "peruana": "investigacion universitaria peruana"
+
+
+DATASETS: dict[str, Dataset] = {
+    "pucp": Dataset(label="PUCP", country="Peru", demonym="peruana"),
+    "ecotec": Dataset(label="ECOTEC", country="Ecuador", demonym="ecuatoriana"),
+}
+
+
+def dataset(key: str) -> Dataset:
+    if key not in DATASETS:
+        raise KeyError(f"dataset desconocido: {key!r}; disponibles: {sorted(DATASETS)}")
+    return DATASETS[key]
 
 
 DOMAINS: dict[str, Domain] = {
