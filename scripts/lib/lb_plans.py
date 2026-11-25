@@ -189,11 +189,12 @@ PLANS: dict[str, Plan] = {
     ),
     # Taxonomia de dominios del MIT AI Risk Repository (v4, dic. 2025): no es
     # de un pais ni de una universidad. policies.csv: scripts/plans/mit_airisk.py.
-    # Usa la plantilla del verificador tal cual: la hoja se nombra como «linea
-    # de investigacion sobre riesgos de la IA» para que «desarrolla o aporta a»
-    # signifique estudiarlo o mitigarlo, no causarlo, y judge_scope exige que
-    # la investigacion trate de IA (los labels tambien lo dicen: el verificador
-    # solo ve label y dominio). Su `text` esta en ingles, como la fuente:
+    # Usa la plantilla del verificador tal cual. El cruce es por tema: se
+    # buscan las unidades mas cercanas a cada categoria aunque no traten de IA
+    # (las descripciones del MIT hablan de IA, y sin la aclaracion de
+    # judge_scope el verificador las rechazaria por eso). La hoja se nombra
+    # «linea tematica» para que «desarrolla o aporta a» no se lea como causar
+    # el riesgo. Su `text` esta en ingles, como la fuente:
     # translate_system lo pasa al espanol, y la cache "<slug>s_en.json" guarda
     # aqui la version en espanol (el cruce toma la mejor de las dos).
     "mit_airisk": Plan(
@@ -201,11 +202,10 @@ PLANS: dict[str, Plan] = {
         load=_policies_csv_loader(plan_csv("mit_airisk")),
         leaf="categoría de riesgo", leaves="categorías de riesgo",
         level1="Dominio", level1_long="Dominio", level2="",
-        judge_leaf="linea de investigacion",
-        judge_scope=("sobre riesgos de la inteligencia artificial (taxonomia de dominios del MIT "
-                     "AI Risk Repository); solo cuenta si la investigacion trata sobre sistemas de "
-                     "IA, algoritmicos o automatizados"),
-        judge_header="LINEAS DE INVESTIGACION SOBRE RIESGOS DE LA IA", judge_level2_tag="dominio",
+        judge_leaf="linea tematica",
+        judge_scope=("de la taxonomia de riesgos del MIT AI Risk Repository; juzga por el tema, "
+                     "aunque la investigacion no trate de inteligencia artificial"),
+        judge_header="LINEAS TEMATICAS", judge_level2_tag="dominio",
         translate_system=(
             "Traduces al espanol textos de la taxonomia de riesgos de la inteligencia artificial "
             "del MIT AI Risk Repository. Traduccion fiel y natural, sin resumir ni agregar nada. "

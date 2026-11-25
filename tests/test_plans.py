@@ -37,14 +37,14 @@ def test_foreign_prompt_names_both_countries():
 
 
 @pytest.mark.parametrize("dataset", ["pucp", "ecotec"])
-def test_mit_airisk_prompt_reads_as_studying_the_risk(dataset):
-    # Plan sin pais: nunca la frase de otro pais; la hoja es una linea de
-    # investigacion sobre el riesgo (estudiarlo, no causarlo) y exige IA.
+def test_mit_airisk_prompt_judges_by_topic(dataset):
+    # Plan sin pais: nunca la frase de otro pais. Cruce por tema: no exige que
+    # la investigacion trate de IA.
     text = lb_plans.get("mit_airisk").judge_system(dataset)
-    assert "aporta a una linea de investigacion sobre riesgos de la inteligencia artificial" in text
-    assert "solo cuenta si la investigacion trata sobre sistemas de IA" in text
+    assert "aporta a una linea tematica de la taxonomia de riesgos del MIT" in text
+    assert "aunque la investigacion no trate de inteligencia artificial" in text
     assert "El plan es de" not in text
-    assert text.endswith("uno por linea de investigacion, en orden.")
+    assert text.endswith("uno por linea tematica, en orden.")
 
 
 def test_mit_airisk_builder_cleans_example_names():
@@ -53,7 +53,9 @@ def test_mit_airisk_builder_cleans_example_names():
     assert mit._ENUM.sub("", "Type 1: Diffusion of responsibility") == "Diffusion of responsibility"
     assert mit._ENUM.sub("", "Risk area 5: Human-Computer Interaction Harms").startswith("Human")
     assert mit._words("Hallucinations") == mit._words("Hallucination")
-    assert set(mit.LABELS_ES) and all("IA" in v for v in mit.LABELS_ES.values())
+    assert len(mit.LABELS_ES) == 24 and mit.LABELS_ES["6.6"] == "Daño ambiental"
+    assert mit.leaf_text("D", "S", "Desc.", ["a", "b"]) == \
+        "Domain: D. Subdomain: S. Desc. Examples of risks: a; b."
 
 
 def test_masculine_leaf_agrees():

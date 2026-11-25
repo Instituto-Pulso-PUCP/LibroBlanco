@@ -12,10 +12,10 @@ en datos/plans/mit_airisk/ (datos/ no se versiona):
 Que se toma (ver lb_plans, plan `mit_airisk`):
   - Hojas: los 24 sub-dominios de la Domain Taxonomy (hoja «Domain Taxonomy
     of AI Risks v1»). Nivel 1: los 7 dominios. Dos niveles, sin l2.
-  - `label`: el nombre en espanol de LABELS_ES, con «de la IA» explicito: el
-    verificador solo ve label + dominio, y sin la IA en el nombre «Daño
-    ambiental» o «Discriminación» calzarian con investigacion que no trata
-    de IA.
+  - `label`: el nombre del sub-dominio en espanol (LABELS_ES). El cruce es
+    por tema: una investigacion sobre desinformacion o daño ambiental se
+    relaciona con su categoria aunque no trate de IA; «IA» queda solo donde
+    el concepto es de la IA misma (2.2, dominio 7).
   - `text` (lo que se embebe): dominio, sub-dominio y descripcion oficiales
     del MIT, mas hasta N_EXAMPLES nombres de riesgos de la base («AI Risk
     Database v4») clasificados en ese sub-dominio. En ingles, como la
@@ -59,30 +59,30 @@ DOMAINS_ES = {
 }
 
 LABELS_ES = {
-    "1.1": "Discriminación injusta y representación sesgada por la IA",
-    "1.2": "Exposición a contenido tóxico generado o difundido por la IA",
-    "1.3": "Desempeño desigual de la IA entre grupos",
-    "2.1": "Vulneración de la privacidad por la IA",
+    "1.1": "Discriminación injusta y representación sesgada",
+    "1.2": "Exposición a contenido tóxico",
+    "1.3": "Desempeño desigual entre grupos",
+    "2.1": "Vulneración de la privacidad e inferencia de información sensible",
     "2.2": "Vulnerabilidades y ataques a sistemas de IA",
-    "3.1": "Información falsa o engañosa producida por la IA",
-    "3.2": "Contaminación del ecosistema informativo por la IA",
-    "4.1": "Desinformación, vigilancia e influencia a gran escala con IA",
-    "4.2": "Ciberataques, armas y daño masivo con IA",
-    "4.3": "Fraude, estafas y manipulación dirigida con IA",
-    "5.1": "Dependencia excesiva y uso inseguro de la IA",
-    "5.2": "Pérdida de agencia y autonomía humana ante la IA",
-    "6.1": "Concentración de poder y reparto injusto de los beneficios de la IA",
-    "6.2": "Desigualdad y deterioro del empleo por la IA",
-    "6.3": "Devaluación económica y cultural del trabajo humano por la IA",
-    "6.4": "Carrera competitiva por desarrollar IA",
-    "6.5": "Fallas de gobernanza de la IA",
-    "6.6": "Daño ambiental de la IA",
-    "7.1": "IA con objetivos en conflicto con los valores humanos (desalineamiento)",
+    "3.1": "Información falsa o engañosa",
+    "3.2": "Contaminación del ecosistema informativo y pérdida de una realidad compartida",
+    "4.1": "Desinformación, vigilancia e influencia a gran escala",
+    "4.2": "Ciberataques, desarrollo o uso de armas y daño masivo",
+    "4.3": "Fraude, estafas y manipulación dirigida",
+    "5.1": "Dependencia excesiva y uso inseguro de la tecnología",
+    "5.2": "Pérdida de agencia y autonomía humana",
+    "6.1": "Concentración de poder y distribución injusta de beneficios",
+    "6.2": "Aumento de la desigualdad y deterioro de la calidad del empleo",
+    "6.3": "Devaluación económica y cultural del trabajo humano",
+    "6.4": "Dinámicas competitivas y carrera tecnológica",
+    "6.5": "Fallas de gobernanza y regulación",
+    "6.6": "Daño ambiental",
+    "7.1": "IA que persigue objetivos en conflicto con los valores humanos",
     "7.2": "IA con capacidades peligrosas",
-    "7.3": "Falta de capacidad o robustez de la IA",
-    "7.4": "Falta de transparencia o interpretabilidad de la IA",
+    "7.3": "Falta de capacidad o robustez de los sistemas",
+    "7.4": "Falta de transparencia o interpretabilidad",
     "7.5": "Bienestar y derechos de la IA",
-    "7.6": "Riesgos de sistemas multiagente de IA",
+    "7.6": "Riesgos de sistemas multiagente",
 }
 
 FIELDS = ["policy_id", "label", "text", "l1_id", "l1_label", "l2_id", "l2_label",
@@ -175,8 +175,7 @@ def _words(name: str) -> frozenset:
 
 
 def leaf_text(domain_en: str, name_en: str, description: str, examples: list[str]) -> str:
-    text = (f"Risks of artificial intelligence. Domain: {domain_en}. Subdomain: {name_en}. "
-            f"{description.rstrip('.')}.")
+    text = f"Domain: {domain_en}. Subdomain: {name_en}. {description.rstrip('.')}."
     if examples:
         text += " Examples of risks: " + "; ".join(examples) + "."
     return text
