@@ -52,6 +52,19 @@ JUDGE_TEMPLATE = (
     "aporta conocimiento directamente util para {ella}; 1 = relacion tangencial o indirecta; 0 = sin "
     "relacion real. Responde SOLO un arreglo JSON de enteros, uno por {leaf}, en orden.")
 
+# Plantilla para una taxonomia de riesgos o problemas (mit_airisk): la de
+# arriba pregunta si la investigacion "desarrolla o aporta a" la hoja, que con
+# un objetivo se lee bien y con un daño no (en una muestra, un estudio de etica
+# algoritmica y desigualdad digital quedaba en 1 contra «Aumento de la
+# desigualdad»). Esta pregunta si estudia el tema que la hoja describe.
+TOPIC_JUDGE_TEMPLATE = (
+    "Evaluas si una investigacion universitaria {demonym} estudia el tema de {a} {leaf} {scope}: "
+    "el fenomeno que describe, sus causas, sus efectos o como prevenirlo o mitigarlo, aunque la "
+    "investigacion no trate de inteligencia artificial.{foreign} Para cada {leaf} responde 2 = la "
+    "investigacion estudia claramente ese tema o aporta conocimiento directamente util sobre el; "
+    "1 = relacion tangencial o indirecta; 0 = sin relacion real. Responde SOLO un arreglo JSON de "
+    "enteros, uno por {leaf}, en orden.")
+
 FOREIGN_CLAUSE = (
     " El plan es de {country} y la investigacion de una universidad de {other}: juzga por el tema y "
     "el conocimiento que aporta, no por el pais donde se hizo ni por el pais que estudia.")
@@ -92,6 +105,8 @@ class Plan:
     # resultado (vinculo / sin vinculo) aunque el prompt siga siendo 0/1/2.
     # Se puede sobrescribir en [plans.<clave>] min_grade.
     min_grade: int = 1
+    # Plantilla del prompt del verificador (mismos campos que JUDGE_TEMPLATE).
+    judge_template: str = JUDGE_TEMPLATE
 
     def judge_system(self, dataset: str) -> str:
         """Prompt del verificador para cruzar las unidades de `dataset` con este plan."""
@@ -100,7 +115,7 @@ class Plan:
         if self.country and ds.country != self.country:
             foreign = FOREIGN_CLAUSE.format(country=self.country, other=ds.country)
         fem = self.judge_feminine
-        return JUDGE_TEMPLATE.format(
+        return self.judge_template.format(
             demonym=ds.demonym, a="una" if fem else "un", leaf=self.judge_leaf,
             scope=self.judge_scope, foreign=foreign,
             pron="la" if fem else "lo", ella="ella" if fem else "el")
@@ -194,12 +209,11 @@ PLANS: dict[str, Plan] = {
     ),
     # Taxonomia de dominios del MIT AI Risk Repository (v4, dic. 2025): no es
     # de un pais ni de una universidad. policies.csv: scripts/plans/mit_airisk.py.
-    # Usa la plantilla del verificador tal cual. El cruce es por tema: se
-    # buscan las unidades mas cercanas a cada categoria aunque no traten de IA
-    # (las descripciones del MIT hablan de IA, y sin la aclaracion de
-    # judge_scope el verificador las rechazaria por eso). La hoja se nombra
-    # «linea tematica» para que «desarrolla o aporta a» no se lea como causar
-    # el riesgo. Su `text` esta en ingles, como la fuente:
+    # El cruce es por tema: se buscan las unidades que estudian el tema de cada
+    # categoria aunque no traten de IA (las descripciones del MIT hablan de IA,
+    # y sin decirlo el verificador las rechazaria por eso). Usa
+    # TOPIC_JUDGE_TEMPLATE: «estudia el tema», no «desarrolla o aporta a», que
+    # con un daño no se lee bien. Su `text` esta en ingles, como la fuente:
     # translate_system lo pasa al espanol, y la cache "<slug>s_en.json" guarda
     # aqui la version en espanol (el cruce toma la mejor de las dos).
     "mit_airisk": Plan(
@@ -207,10 +221,9 @@ PLANS: dict[str, Plan] = {
         load=_policies_csv_loader(plan_csv("mit_airisk")),
         leaf="categoría de riesgo", leaves="categorías de riesgo",
         level1="Dominio", level1_long="Dominio", level2="",
-        judge_leaf="linea tematica",
-        judge_scope=("de la taxonomia de riesgos del MIT AI Risk Repository; juzga por el tema, "
-                     "aunque la investigacion no trate de inteligencia artificial"),
-        judge_header="LINEAS TEMATICAS", judge_level2_tag="dominio",
+        judge_leaf="categoria de riesgo",
+        judge_scope="de la taxonomia del MIT AI Risk Repository",
+        judge_header="CATEGORIAS DE RIESGO", judge_level2_tag="dominio",
         translate_system=(
             "Traduces al espanol textos de la taxonomia de riesgos de la inteligencia artificial "
             "del MIT AI Risk Repository. Traduccion fiel y natural, sin resumir ni agregar nada. "
@@ -226,6 +239,7 @@ PLANS: dict[str, Plan] = {
         # una misma unidad) y el verificador es generoso con el grado 1: en una
         # muestra de 80 vinculos, la mitad de los de grado 1 no se sostenian.
         min_grade=2,
+        judge_template=TOPIC_JUDGE_TEMPLATE,
     ),
 }
 

@@ -41,10 +41,10 @@ def test_mit_airisk_prompt_judges_by_topic(dataset):
     # Plan sin pais: nunca la frase de otro pais. Cruce por tema: no exige que
     # la investigacion trate de IA.
     text = lb_plans.get("mit_airisk").judge_system(dataset)
-    assert "aporta a una linea tematica de la taxonomia de riesgos del MIT" in text
+    assert "estudia el tema de una categoria de riesgo de la taxonomia del MIT" in text
     assert "aunque la investigacion no trate de inteligencia artificial" in text
-    assert "El plan es de" not in text
-    assert text.endswith("uno por linea tematica, en orden.")
+    assert "desarrolla o aporta" not in text and "El plan es de" not in text
+    assert text.endswith("uno por categoria de riesgo, en orden.")
 
 
 def test_mit_airisk_builder_cleans_example_names():
