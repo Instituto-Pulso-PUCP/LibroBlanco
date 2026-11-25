@@ -36,6 +36,26 @@ def test_foreign_prompt_names_both_countries():
     assert "Ecuador no se detiene" in lb_plans.get("pnd_ec_2025").judge_system("pucp")
 
 
+@pytest.mark.parametrize("dataset", ["pucp", "ecotec"])
+def test_mit_airisk_prompt_reads_as_studying_the_risk(dataset):
+    # Plan sin pais: nunca la frase de otro pais; la hoja es una linea de
+    # investigacion sobre el riesgo (estudiarlo, no causarlo) y exige IA.
+    text = lb_plans.get("mit_airisk").judge_system(dataset)
+    assert "aporta a una linea de investigacion sobre riesgos de la inteligencia artificial" in text
+    assert "solo cuenta si la investigacion trata sobre sistemas de IA" in text
+    assert "El plan es de" not in text
+    assert text.endswith("uno por linea de investigacion, en orden.")
+
+
+def test_mit_airisk_builder_cleans_example_names():
+    sys.path.insert(0, str(SCRIPTS / "plans"))
+    mit = pytest.importorskip("mit_airisk")
+    assert mit._ENUM.sub("", "Type 1: Diffusion of responsibility") == "Diffusion of responsibility"
+    assert mit._ENUM.sub("", "Risk area 5: Human-Computer Interaction Harms").startswith("Human")
+    assert mit._words("Hallucinations") == mit._words("Hallucination")
+    assert set(mit.LABELS_ES) and all("IA" in v for v in mit.LABELS_ES.values())
+
+
 def test_masculine_leaf_agrees():
     plan = lb_plans.Plan(**{**lb_plans.get("pnd_ec_2025").__dict__,
                             "judge_leaf": "reto", "judge_feminine": False})

@@ -11,6 +11,9 @@ lb_domains.Domain.plan es solo el plan por defecto del dominio.
   pnd_ec_2025  PND 2025-2029 "Ecuador no se detiene": Eje -> Objetivo ->
                Politica (45). Desde el policies.csv estandar que escribe
                scripts/datasets/ecotec.py.
+  mit_airisk   Repositorio de Riesgos de IA del MIT (v4): Dominio -> categoria de
+               riesgo (24 sub-dominios). Sin pais. Desde datos/plans/mit_airisk/
+               policies.csv, que escribe scripts/plans/mit_airisk.py.
 
 Anadir un plan = su policies.csv en datos/plans/<clave>/ (columnas abajo) y
 una entrada en PLANS con `load=_policies_csv_loader(plan_csv("<clave>"))`;
@@ -183,6 +186,37 @@ PLANS: dict[str, Plan] = {
         source_note="columna `Política` de datos/ecotec/anexoPND25-29.xlsx "
                     "(enriquecida con su objetivo, indicadores y lineamientos ETN)",
         country="Ecuador", home_dataset="ecotec",
+    ),
+    # Taxonomia de dominios del MIT AI Risk Repository (v4, dic. 2025): no es
+    # de un pais ni de una universidad. policies.csv: scripts/plans/mit_airisk.py.
+    # Usa la plantilla del verificador tal cual: la hoja se nombra como «linea
+    # de investigacion sobre riesgos de la IA» para que «desarrolla o aporta a»
+    # signifique estudiarlo o mitigarlo, no causarlo, y judge_scope exige que
+    # la investigacion trate de IA (los labels tambien lo dicen: el verificador
+    # solo ve label y dominio). Su `text` esta en ingles, como la fuente:
+    # translate_system lo pasa al espanol, y la cache "<slug>s_en.json" guarda
+    # aqui la version en espanol (el cruce toma la mejor de las dos).
+    "mit_airisk": Plan(
+        key="mit_airisk", name="Repositorio de Riesgos de IA (MIT)",
+        load=_policies_csv_loader(plan_csv("mit_airisk")),
+        leaf="categoría de riesgo", leaves="categorías de riesgo",
+        level1="Dominio", level1_long="Dominio", level2="",
+        judge_leaf="linea de investigacion",
+        judge_scope=("sobre riesgos de la inteligencia artificial (taxonomia de dominios del MIT "
+                     "AI Risk Repository); solo cuenta si la investigacion trata sobre sistemas de "
+                     "IA, algoritmicos o automatizados"),
+        judge_header="LINEAS DE INVESTIGACION SOBRE RIESGOS DE LA IA", judge_level2_tag="dominio",
+        translate_system=(
+            "Traduces al espanol textos de la taxonomia de riesgos de la inteligencia artificial "
+            "del MIT AI Risk Repository. Traduccion fiel y natural, sin resumir ni agregar nada. "
+            "Responde SOLO con un arreglo JSON de strings, uno por texto de entrada, en el mismo "
+            "orden."),
+        file_prefix="mitai", leaf_slug="categoria",
+        csv_columns=("dominio", "nivel2", "categoria_riesgo"),
+        cache_dir=REPO_ROOT / "salidas" / "topics" / "plans" / "mit_airisk",
+        source_note="Domain Taxonomy del MIT AI Risk Repository v4 (24 sub-dominios, "
+                    "enriquecidos con su descripcion y riesgos de ejemplo de la base)",
+        country=None, home_dataset=None,
     ),
 }
 

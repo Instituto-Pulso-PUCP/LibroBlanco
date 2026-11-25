@@ -57,6 +57,13 @@ PLANS = {
         "source": "del Plan Nacional de Desarrollo 2025-2029 del Ecuador",
         "validated_for": None, "validation": None,
     },
+    "mit_airisk": {
+        "name": "Repositorio de Riesgos de IA (MIT)", "short": "Riesgos IA",
+        "tab": "Riesgos de IA (MIT)",
+        "cross": "las categorías de riesgo de IA del MIT", "level1_plural": "dominios",
+        "source": "del Repositorio de Riesgos de IA del MIT (taxonomía de dominios, v4, dic. 2025)",
+        "validated_for": None, "validation": None,
+    },
 }
 
 NOT_VALIDATED = ("Para este cruce todavía no hay una revisión manual de los vínculos: no hay una tasa "

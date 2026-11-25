@@ -78,3 +78,14 @@ Un plan nuevo (p.ej. los retos de Prociencia) que no sale de un adaptador: su
 `policy_id, label, text, l1_id, l1_label[, l2_label]` (`l2_label` vacio o
 ausente en un plan de dos niveles) y una entrada en `lb_plans.PLANS` con
 `load=_policies_csv_loader(plan_csv("<clave>"))`.
+
+Ejemplo: el plan `mit_airisk` (taxonomia de dominios del MIT AI Risk
+Repository, 24 categorias de riesgo, sin pais). Su `policies.csv` lo escribe
+`scripts/plans/mit_airisk.py` desde la hoja del MIT (en el docstring, de donde
+bajarla); despues se cruza como cualquier otro plan:
+
+```bash
+python3 scripts/plans/mit_airisk.py
+python3 scripts/analysis/ceplan_units.py --plan mit_airisk --dry-run \
+    --run projects=<run> --run publications_linked=<run>
+```
