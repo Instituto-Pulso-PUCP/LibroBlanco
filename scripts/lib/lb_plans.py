@@ -87,6 +87,11 @@ class Plan:
     # reporte_cobertura_<dataset>.md.
     home_dataset: str | None = None
     judge_feminine: bool = True  # "una politica ... la desarrolla" / "un reto ... lo desarrolla"
+    # Grado minimo del verificador para que un vinculo cuente (ceplan_units).
+    # 1: claro o tangencial (PEDN, PND). 2: solo los claros, dos clases en el
+    # resultado (vinculo / sin vinculo) aunque el prompt siga siendo 0/1/2.
+    # Se puede sobrescribir en [plans.<clave>] min_grade.
+    min_grade: int = 1
 
     def judge_system(self, dataset: str) -> str:
         """Prompt del verificador para cruzar las unidades de `dataset` con este plan."""
@@ -217,6 +222,10 @@ PLANS: dict[str, Plan] = {
         source_note="Domain Taxonomy del MIT AI Risk Repository v4 (24 sub-dominios, "
                     "enriquecidos con su descripcion y riesgos de ejemplo de la base)",
         country=None, home_dataset=None,
+        # El cruce por tema junta candidatas de similitud pareja (0.50-0.57 en
+        # una misma unidad) y el verificador es generoso con el grado 1: en una
+        # muestra de 80 vinculos, la mitad de los de grado 1 no se sostenian.
+        min_grade=2,
     ),
 }
 

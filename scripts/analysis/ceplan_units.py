@@ -130,8 +130,10 @@ def params_from(cfg, args, plan):
          for k, v in DEFAULTS.items()}
     if args.model:
         p["judge_model_id"] = args.model
+    p["min_grade"] = cfg.get(f"plans.{plan.key}.min_grade", plan.min_grade)
     p["floor"] = float(p["floor"])
-    for k in ("max_candidates", "reverse_top_m", "reverse_max_per_unit", "top_n", "judge_workers", "developed_min_grade2"):
+    for k in ("max_candidates", "reverse_top_m", "reverse_max_per_unit", "top_n", "judge_workers", "developed_min_grade2",
+              "min_grade"):
         p[k] = int(p[k])
     return p
 
@@ -310,14 +312,15 @@ def run_domain(cfg, params, plan, domain, run_id, subs, emb_es, emb_en, dry_run)
           f"{usage['input_tokens']:,} / {usage['output_tokens']:,} tokens, "
           f"~USD {usage['usd']:.3f}; respuestas ilegibles: {len(failed)}")
 
-    # Afinidad: todos los vinculos confirmados (grado >= 1).
+    # Afinidad: todos los vinculos confirmados (grado >= min_grade del plan; 1
+    # salvo en un plan de dos clases, lb_plans.Plan.min_grade).
     weight = {1: float(params["weight_grade_1"]), 2: float(params["weight_grade_2"])}
     affinity, links = {}, {}
     for unit_id, cands in candidates.items():
         g = grades.get(unit_id)
         if not g:
             continue
-        kept = [(j, s, gr) for (j, s), gr in zip(cands, g) if gr >= 1]
+        kept = [(j, s, gr) for (j, s), gr in zip(cands, g) if gr >= params["min_grade"]]
         # 1e-3 evita peso cero para una candidata justo en el piso
         for j, s, gr in kept:
             affinity[(unit_id, subs[j]["id"])] = weight[gr] * (s - floor + 1e-3)

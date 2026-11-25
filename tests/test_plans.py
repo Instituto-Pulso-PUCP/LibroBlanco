@@ -58,6 +58,23 @@ def test_mit_airisk_builder_cleans_example_names():
         "Domain: D. Subdomain: S. Desc. Examples of risks: a; b."
 
 
+def test_min_grade_comes_from_plan_and_config():
+    cu = pytest.importorskip("ceplan_units")
+
+    class Cfg:
+        def __init__(self, values):
+            self.values = values
+
+        def get(self, key, default=None):
+            return self.values.get(key, default)
+
+    args = type("A", (), {"model": None})()
+    assert cu.params_from(Cfg({}), args, lb_plans.get("pedn2050"))["min_grade"] == 1
+    assert cu.params_from(Cfg({}), args, lb_plans.get("mit_airisk"))["min_grade"] == 2
+    cfg = Cfg({"plans.mit_airisk.min_grade": "1"})
+    assert cu.params_from(cfg, args, lb_plans.get("mit_airisk"))["min_grade"] == 1
+
+
 def test_masculine_leaf_agrees():
     plan = lb_plans.Plan(**{**lb_plans.get("pnd_ec_2025").__dict__,
                             "judge_leaf": "reto", "judge_feminine": False})
