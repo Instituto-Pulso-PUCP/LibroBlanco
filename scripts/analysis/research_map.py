@@ -18,7 +18,10 @@ uno donde puede correr:
           k-means sobre el plano -> sectores contiguos; nombre de cada sector
           = sus temas normalizados (etapa 04) de mayor peso
           -> salidas/topics/mapa/mapa_base.json  (EL mapa; copiar al servidor)
-  place   (servidor, solo numpy; lo llama rebuild_atlas.sh) cada hoja de cada
+  name    (servidor, una vez tras fit) el LLM da a cada sector un nombre amplio
+          a partir de sus temas y titulos (una sola llamada con todos, para
+          que no se repitan); el nombre por tema queda en name_topic
+  place  (servidor, solo numpy; lo llama rebuild_atlas.sh) cada hoja de cada
           plan va al promedio, ponderado por similitud, de la posicion de sus
           K unidades mas parecidas (max es/en, como el cruce). Una hoja que no
           supera el piso con ninguna unidad queda marcada «lejos de toda la
@@ -33,6 +36,7 @@ esta la investigacion que mas se le parece.
     scp servidor:LibroBlanco/salidas/topics/mapa/unidades.* salidas/topics/mapa/
     python scripts/analysis/research_map.py fit              # local, una vez
     scp salidas/topics/mapa/mapa_base.json servidor:LibroBlanco/salidas/topics/mapa/
+    python3 scripts/analysis/research_map.py name            # servidor, una vez
     python3 scripts/analysis/research_map.py place           # servidor
 """
 from __future__ import annotations
@@ -185,6 +189,48 @@ def cmd_fit(args):
 
 
 # --------------------------------------------------------------------------
+# name (servidor, LLM): un nombre amplio por sector
+# --------------------------------------------------------------------------
+
+NAME_SYSTEM = """Nombras las areas de un mapa de la investigacion de dos universidades \
+(PUCP, Peru; ECOTEC, Ecuador). Cada area agrupa proyectos y publicaciones cercanos; para cada \
+una recibes sus temas de mas peso y algunos titulos. Da a cada area un nombre amplio de 2 a 5 \
+palabras en espanol, al nivel de un area del conocimiento (p.ej. «Física y materiales», \
+«Historia y sociedad andina»), no el de un tema puntual. Los nombres deben ser distintos entre \
+si. Responde SOLO un arreglo JSON de strings, uno por area, en el orden recibido."""
+
+
+def cmd_name(_args):
+    import random
+    import lb_aws
+    import lb_config
+    base = json.loads(BASE.read_text(encoding="utf-8"))
+    meta = json.loads(UNITS_JSON.read_text(encoding="utf-8"))
+    by_sector = defaultdict(list)
+    for m in meta:
+        if m["id"] in base["units"]:
+            by_sector[base["units"][m["id"]][2]].append(m)
+    rng = random.Random(SEED)
+    blocks = []
+    for s in base["sectors"]:
+        members = by_sector[s["id"]]
+        topics = sector_topics(members, n=10)
+        titles = [m["title"][:110] for m in rng.sample(members, min(8, len(members)))]
+        blocks.append(f"AREA {s['id'] + 1} ({len(members)} unidades)\nTemas: " +
+                      "; ".join(t[0] for t in topics) + "\nTitulos: " + " | ".join(titles))
+    raw = lb_aws.llm_client(lb_config.load()).complete(NAME_SYSTEM, "\n\n".join(blocks), max_tokens=2000)
+    names = json.loads(raw[raw.find("["):raw.rfind("]") + 1])
+    if len(names) != len(base["sectors"]):
+        raise SystemExit(f"El LLM devolvio {len(names)} nombres para {len(base['sectors'])} sectores: {raw[:300]}")
+    for s, name in zip(base["sectors"], names):
+        s["name_topic"] = s.get("name_topic", s["name"])
+        s["name"] = name.strip()
+        print(f"   {s['id']:2d} {s['name']:40s} <- {s['name_topic'][:50]}")
+    BASE.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8")
+    print(f"-> {BASE.relative_to(ROOT)}: nombres de sector actualizados")
+
+
+# --------------------------------------------------------------------------
 # place (servidor, numpy)
 # --------------------------------------------------------------------------
 
@@ -270,6 +316,7 @@ def main():
     fit.add_argument("--sectors", type=int, default=N_SECTORS)
     fit.add_argument("--perplexity", type=float, default=PERPLEXITY)
     fit.set_defaults(fn=cmd_fit)
+    sub.add_parser("name").set_defaults(fn=cmd_name)
     sub.add_parser("place").set_defaults(fn=cmd_place)
     args = parser.parse_args()
     args.fn(args)
