@@ -22,11 +22,12 @@ Pasos (todo en datos/plans/enciclica_mh/):
      retos o propuestas que el texto plantea, con sus parrafos de respaldo y
      una cita literal -> extraccion.json. Se procesa todo el documento: si una
      seccion no propone nada (historia, principios), devuelve [].
-  3. normalize: una sola llamada con todas las candidatas: junta las que dicen
-     lo mismo (la educacion aparece en ¶14, ¶106, ¶139-147, ¶238), asigna cada
-     reto a la seccion de los capitulos III-V donde mas se desarrolla y
-     descarta lo que no es un reto -> retos_borrador.json y
-     retos_borrador.xlsx (para la revision).
+  3. normalize: en dos pasos de respuestas cortas (la pasarela corta las
+     largas): asigna cada candidata a la seccion de los capitulos III-V donde
+     su tema mas se desarrolla, o la descarta si no es un reto (por lotes); y
+     por seccion junta las que dicen lo mismo (la educacion aparece en ¶14,
+     ¶106, ¶139-147, ¶238) -> retos_borrador.json y retos_borrador.xlsx (para
+     la revision).
 
 Estructura del plan (tres niveles, como el PEDN): capitulo -> seccion de la
 enciclica -> reto. Los niveles los pone el documento; los retos, la
@@ -44,6 +45,7 @@ import html
 import json
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -248,27 +250,79 @@ def cmd_extract(_args):
 # 3. normalize
 # --------------------------------------------------------------------------
 
-NORMALIZE_SYSTEM = """Normalizas una lista de retos candidatos extraidos, seccion por seccion, de \
-una enciclica papal. La lista final es un plan de retos contra el que se compararan proyectos de \
-investigacion universitaria, asi que cada reto debe ser concreto, distinto de los demas y \
-abordable por la investigacion.
+# Normalizar es dos pasos de respuestas cortas: la pasarela LibreChat corta
+# (HTTP 504) una respuesta larga, y una sola llamada con los ~200 candidatos y
+# ~50 retos descritos no pasaba. 1) asignar: cada candidato a una seccion de
+# los capitulos III-V, o descartarlo (por lotes); 2) fusionar: por seccion, los
+# candidatos que dicen lo mismo en un reto con su descripcion. Como cada tema va
+# a la seccion donde mas se desarrolla, los duplicados entre capitulos caen
+# juntos en el paso 2; lo que quede, se ve en la revision a mano.
+ASSIGN_BATCH = 40
 
-Tareas:
-1. Junta en un solo reto los candidatos que expresan el mismo desafio (el documento retoma temas \
-en varios capitulos). Un reto final puede reunir varios candidatos.
-2. Asigna cada reto final a UNA de las SECCIONES PERMITIDAS: aquella donde el tema se desarrolla \
-mas. Los candidatos de la introduccion, los capitulos I y II y la conclusion se asignan a la \
-seccion permitida que corresponda por tema.
-3. Descarta los candidatos que no son retos abordables (demasiado genericos, puramente \
-espirituales o doctrinales), indicando el motivo en pocas palabras.
-4. Apunta a entre 30 y 50 retos finales; no fuerces el numero si el texto no da para eso.
+ASSIGN_SYSTEM = """Clasificas retos candidatos extraidos de una enciclica papal. La lista final \
+sera un plan de retos contra el que se compararan proyectos de investigacion universitaria.
 
-Para cada reto final: "reto" (infinitivo, 6 a 14 palabras), "descripcion" (1 o 2 frases fieles \
-al texto), "seccion" (copiada EXACTAMENTE de las secciones permitidas), "candidatos" (ids). Cada \
-candidato debe aparecer en exactamente un reto final o en los descartados.
+Para cada candidato decide UNA de dos cosas:
+- la SECCION (por su numero, p.ej. "S4") de la lista dada donde ese tema se desarrolla mas. Los \
+candidatos de la introduccion, los capitulos I y II y la conclusion se asignan a la seccion que \
+corresponda por tema;
+- o "descartar", si no es un reto abordable por la investigacion: demasiado generico, puramente \
+espiritual, doctrinal o interno de la Iglesia, o una propuesta historica de otro Papa que el texto \
+solo recuerda. Indica el motivo en pocas palabras.
 
-Responde SOLO un objeto JSON: {"retos": [...], "descartados": [{"candidato": id, "motivo": \
-"..."}]}."""
+Responde SOLO un objeto JSON: {"<id>": "S4", "<id>": "descartar: <motivo>", ...} con TODOS los \
+ids recibidos."""
+
+MERGE_SYSTEM = """Normalizas los retos candidatos que una enciclica papal plantea en una de sus \
+secciones. La lista final es un plan de retos contra el que se compararan proyectos de \
+investigacion universitaria: cada reto debe ser concreto, distinto de los demas y abordable por \
+la investigacion.
+
+Junta en un solo reto los candidatos que expresan el mismo desafio; deja separados los que piden \
+cosas distintas. No descartes ninguno: ya se filtraron. En todo el documento habra entre 30 y 50 \
+retos, asi que una seccion suele dar entre 2 y 8.
+
+Para cada reto: "reto" (infinitivo, 6 a 14 palabras), "descripcion" (1 o 2 frases fieles al \
+texto, sin agregar nada), "candidatos" (ids). Cada candidato debe aparecer en exactamente un reto.
+Responde SOLO un arreglo JSON de objetos con esas claves."""
+
+
+def cand_line(c: dict) -> str:
+    return (f"{c['id']} [{c['chapter']} / {c['section']}; ¶{','.join(map(str, c['parrafos']))}] "
+            f"{c['reto']} — {c['descripcion']}")
+
+
+def two_step_normalize(client, cands: list[dict], sections: list[tuple[str, str]]) -> dict:
+    """{"retos": [{reto, descripcion, seccion, candidatos}], "descartados": [...]}."""
+    numbered = {f"S{n}": s for n, (_c, s) in enumerate(sections, 1)}
+    header = "SECCIONES:\n" + "\n".join(f"S{n}. {s} ({c})" for n, (c, s) in enumerate(sections, 1))
+    assign = {}
+    for start in range(0, len(cands), ASSIGN_BATCH):
+        batch = cands[start:start + ASSIGN_BATCH]
+        out = ask_json(client, ASSIGN_SYSTEM, header + "\n\nCANDIDATOS:\n" +
+                       "\n".join(cand_line(c) for c in batch), max_tokens=4000)
+        assign.update({k: str(v) for k, v in out.items()})
+        print(f"   asignados {min(start + ASSIGN_BATCH, len(cands))}/{len(cands)}")
+    by_section, discarded = defaultdict(list), []
+    for c in cands:
+        verdict = assign.get(c["id"], "").strip()
+        code = verdict.split()[0].rstrip(".:") if verdict else ""
+        if verdict.lower().startswith("descartar"):
+            discarded.append({"candidato": c["id"], "motivo": verdict.split(":", 1)[-1].strip()})
+        elif code in numbered:
+            by_section[numbered[code]].append(c)
+        # sin veredicto legible: queda sin destino y cmd_normalize lo avisa
+    retos = []
+    for _chapter, section in sections:
+        group = by_section.get(section)
+        if not group:
+            continue
+        items = ask_json(client, MERGE_SYSTEM, f"SECCION: {section}\n\nCANDIDATOS:\n" +
+                         "\n".join(cand_line(c) for c in group), max_tokens=4000)
+        for r in items:
+            retos.append({**r, "seccion": section})
+        print(f"   {section[:55]:55s} {len(group):3d} candidatos -> {len(items):2d} retos")
+    return {"retos": retos, "descartados": discarded}
 
 
 def cmd_normalize(_args):
@@ -283,11 +337,7 @@ def cmd_normalize(_args):
             sections.append((p["chapter"], p["section"]))
     allowed = {s for _c, s in sections}
     chapter_of = {s: c for c, s in sections}
-    user = ("SECCIONES PERMITIDAS:\n" + "\n".join(f"- {s} ({c})" for c, s in sections) +
-            "\n\nCANDIDATOS:\n" + "\n".join(
-                f"{c['id']} [{c['chapter']} / {c['section']}; ¶{','.join(map(str, c['parrafos']))}] "
-                f"{c['reto']} — {c['descripcion']}" for c in cands))
-    result = ask_json(client, NORMALIZE_SYSTEM, user, max_tokens=16000)
+    result = two_step_normalize(client, cands, sections)
 
     seen, retos, problems = set(), [], []
     for n, r in enumerate(result.get("retos", []), 1):
