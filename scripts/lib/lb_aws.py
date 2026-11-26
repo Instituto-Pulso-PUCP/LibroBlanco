@@ -400,7 +400,10 @@ class OpenAICompatClient:
                 headers={"Content-Type": "application/json",
                          "Authorization": f"Bearer {api_key}"})
             try:
-                with urllib.request.urlopen(request, timeout=180) as response:
+                # gateway.timeout (o LB_GATEWAY__TIMEOUT): una respuesta larga,
+                # como la normalizacion de la enciclica, pasa de los 180 s.
+                timeout = float(self.cfg.get("gateway.timeout", 180))
+                with urllib.request.urlopen(request, timeout=timeout) as response:
                     payload = json.loads(response.read())
                 return payload, {"latency": time.perf_counter() - start,
                                  "retries": retries, "throttles": throttles}
