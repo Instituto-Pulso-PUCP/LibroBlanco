@@ -502,3 +502,47 @@ button.meter:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .m-val{font-family:var(--font-head);font-weight:600;font-size:15px;text-align:right}
 @media (max-width:560px){ .meter{grid-template-columns:minmax(0,1fr) 52px}
   .meter .m-track{grid-column:1 / -1;grid-row:2} }
+
+/* === Vista unica: investigacion x retos =================================== */
+.query{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px 16px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin:0 0 18px}
+.q-field{display:flex;flex-direction:column;gap:4px;flex:1 1 260px;min-width:0}
+.q-lbl{font-family:var(--font-head);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600}
+.q-field select{font:inherit;font-size:15px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;width:100%}
+.q-field select:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.q-note{font-size:12px;color:var(--ink-3);min-height:1.2em}
+.q-x{font-family:var(--font-head);font-size:22px;color:var(--ink-3);padding-bottom:26px}
+.q-help{appearance:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);font-family:var(--font-head);font-weight:700;font-size:16px;
+  cursor:pointer;margin-bottom:22px;flex:none}
+.q-help:hover{background:var(--surface-2)}
+.q-help:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (max-width:640px){ .q-x{display:none} .q-help{margin-bottom:0} }
+
+dialog.help{border:1px solid var(--line);border-radius:var(--radius);padding:0;max-width:640px;
+  width:calc(100% - 32px);color:var(--ink);background:var(--surface)}
+dialog.help::backdrop{background:#04235466}
+.help-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--line)}
+.help-head h2{font-family:var(--font-head);font-size:18px;margin:0}
+.help-close{appearance:none;border:0;background:none;font-size:24px;line-height:1;cursor:pointer;color:var(--ink-2)}
+.help-close:focus-visible{outline:2px solid var(--focus)}
+.help-body{padding:6px 18px 18px;max-height:70vh;overflow:auto;font-size:14px;line-height:1.55}
+.help-body h3{font-family:var(--font-head);font-size:14px;margin:16px 0 4px}
+.help-body p{margin:0 0 8px}
+
+.card .sub-h{font-family:var(--font-head);font-size:15px;font-weight:600;margin:22px 0 4px}
+table.areas td .unit-meta{display:block}
+.detail .eyebrow{margin:0 0 4px}
+.detail>h3{font-family:var(--font-head);font-size:18px;font-weight:600;margin:0 0 4px;line-height:1.3}
+.detail>.unit-meta{display:block;margin:0 0 10px}
+ul.links{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+ul.links li{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px}
+ul.links .unit-meta{flex-basis:100%;margin-left:0}
+
+.dcell.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+svg.rmap .u.lk{fill:var(--pucp-orange);opacity:.95}
+svg.rmap .mk.sel{stroke:var(--ink);stroke-width:3}
+.mk-sw.rmap{width:12px;height:12px}

@@ -433,9 +433,13 @@ def main():
     for stale in plan_dir.glob("*.json"):
         if stale.stem not in plans:
             stale.unlink()
+    # domains y plan_names: con ellos la pagina arma sus dos selectores
+    # (investigacion x retos) sin bajar los datos de cada dataset.
     update_manifest(out / "datasets.json", {
         "id": dataset, "label": profile["label"], "title": profile["title"], "runs": runs,
+        "domains": {d: profile["domains"][d]["tab"] for d in runs},
         "plans": list(plans), "plan": default,
+        "plan_names": {k: profile["plans"][k]["short"] for k in plans},
         "built": datetime.date.today().isoformat()})
     write_page(out / "index.html", None)
     standalone = out.parent / f"atlas_{dataset}.html"

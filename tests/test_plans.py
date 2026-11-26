@@ -182,7 +182,10 @@ def test_plan_blocks_finds_every_crossed_plan(tmp_path, monkeypatch):
 def test_atlas_page_inlines_every_script():
     ap = pytest.importorskip("atlas_page")
     html = ap.render({"profile": {}, "data": {}})
-    assert "window.AtlasCharts" in html and "function mount(B, planKey)" in html
+    assert "window.AtlasCharts" in html and "function renderMap(" in html
     assert '<script src="' not in html and '<link rel="stylesheet" href="atlas.css">' not in html
     # los graficos se cargan antes que la pagina que los usa
-    assert html.index("window.AtlasCharts") < html.index("function mount(B, planKey)")
+    assert html.index("window.AtlasCharts") < html.index("function renderMap(")
+    # una sola vista: los dos selectores y la ayuda, sin las pestañas de antes
+    assert 'id="q-research"' in html and 'id="q-plan"' in html and 'id="help"' in html
+    assert 'data-sec="' not in html

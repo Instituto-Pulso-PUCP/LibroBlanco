@@ -294,13 +294,17 @@ def cmd_place(_args):
                       for l, p in zip(leaves, placed)]}
         far = sum(r["far"] for r in plans[key]["retos"])
         print(f"  {key:12s} {len(leaves):4d} hojas colocadas ({far} lejos de toda la investigacion)")
-    # Las unidades van compactas: x, y, sector, dataset (indice).
+    # Las unidades van compactas: x, y, sector, dataset (indice), dominio
+    # (indice) e id de la unidad en su dominio. Con dominio e id, la pagina
+    # resalta el universo elegido y las unidades vinculadas a un reto.
     datasets = sorted({meta[u]["dataset"] for u in ids})
+    domains = sorted({meta[u]["domain"] for u in ids})
     payload = {"version": base["version"], "params": {**base["params"], "k": K_NEIGHBOURS, "floor": floor},
-               "datasets": datasets,
+               "datasets": datasets, "domains": domains,
                "sectors": [{k: s[k] for k in ("id", "name", "topics", "n", "by_dataset", "cx", "cy", "hull")}
                            for s in base["sectors"]],
-               "units": [[*base["units"][u][:3], datasets.index(meta[u]["dataset"])] for u in ids],
+               "units": [[*base["units"][u][:3], datasets.index(meta[u]["dataset"]),
+                          domains.index(meta[u]["domain"]), u.split("/", 1)[1]] for u in ids],
                "plans": plans}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
