@@ -361,7 +361,128 @@
     });
   }
 
+  // --- quien trabaja cada reto ----------------------------------------------------
+  // Una celda del mismo tamaño por hoja del plan, agrupadas por nivel 1, con un
+  // punto por unidad vinculada: lleno = relacion clara, hueco = tangencial. Se
+  // lee de un vistazo cuantas unidades responden a cada reto, y una celda vacia
+  // es un reto que casi nadie trabaja. Las celdas van en el orden del plan, para
+  // que cada reto este siempre en el mismo lugar.
+  //   groups: [{key, label, cells: [{id, label, n2, n1, dots: [{id, g, t}]}]}]
+  //   o: {onCell(id), onDot(id), maxDots, noun, nouns, leaves}
+  function dotGrid(box, groups, o){
+    var max = o.maxDots || 120;
+    var legend = h('div', 'viz-legend', null, box);
+    [['dot g2', 'relación clara'], ['dot g1', 'tangencial'], ['dcell-empty-sw', 'ninguna relación clara']]
+      .forEach(function(x){
+        var it = h('span', 'it', null, legend);
+        h('i', x[0], null, it); h('span', null, x[1], it);
+      });
+    var grid = h('div', 'dgrid', null, box);
+    groups.forEach(function(g){
+      var blk = h('div', 'dgroup', null, grid);
+      h('h4', null, g.label, blk);
+      var empty = g.cells.filter(function(c){ return !c.n2; }).length;
+      h('p', 'cg-sum', g.cells.length + ' ' + o.leaves + ' · ' + empty + ' sin ' + o.nouns +
+        ' con relación clara', blk);
+      var cells = h('div', 'dcells', null, blk);
+      g.cells.forEach(function(c){
+        var cell = h('div', 'dcell' + (c.n2 ? '' : ' empty'), null, cells);
+        var head = h('button', 'dc-h', null, cell);
+        head.type = 'button';
+        h('span', 'dc-l', c.label, head);
+        var ct = h('span', 'dc-n', null, head);
+        h('b', 'num', String(c.n2), ct);
+        h('span', null, ' clara' + (c.n2 === 1 ? '' : 's') + (c.n1 ? ' · ' + c.n1 + ' tang.' : ''), ct);
+        head.setAttribute('aria-label', c.label + ': ' + c.n2 + ' ' + o.nouns + ' con relación clara, ' +
+          c.n1 + ' tangenciales');
+        if (o.onCell) head.addEventListener('click', function(){ hideTip(); o.onCell(c.id); });
+        var dots = h('div', 'dc-dots', null, cell);
+        dots.setAttribute('aria-hidden', 'true');
+        c.dots.slice(0, max).forEach(function(d){
+          var i = h('i', 'dot g' + d.g, null, dots);
+          i.dataset.u = d.id;
+        });
+        if (c.dots.length > max) h('span', 'dc-more', '+' + (c.dots.length - max), dots);
+        var byId = {};
+        c.dots.forEach(function(d){ byId[d.id] = d; });
+        dots.addEventListener('pointermove', function(ev){
+          var d = ev.target.dataset && byId[ev.target.dataset.u];
+          if (d) showTip([d.g === 2 ? 'Relación clara' : 'Tangencial', d.t, c.label], ev.clientX, ev.clientY);
+          else hideTip();
+        });
+        dots.addEventListener('pointerleave', hideTip);
+        if (o.onDot) dots.addEventListener('click', function(ev){
+          var d = ev.target.dataset && byId[ev.target.dataset.u];
+          if (d){ hideTip(); o.onDot(d.id); }
+        });
+      });
+    });
+  }
+
+  // --- mapa de la investigacion con retos encima ----------------------------------
+  // Fondo fijo: sectores (envolventes) y un punto gris por unidad; encima, un
+  // marcador por reto de cada capa (plan). La forma distingue las capas, asi no
+  // depende solo del color.
+  //   o: {sectors: [{id, name, hull, cx, cy}], units: [[x, y, s, ds]], hiDs,
+  //       layers: [{key, label, shape, marks: [{x, y, far, lines, onClick}]}], aria}
+  var SHAPES = ['circle', 'square', 'diamond', 'triangle'];
+  function mark(shape, x, y, r, parent){
+    if (shape === 'square') return s('rect', {x: x - r * .9, y: y - r * .9, width: r * 1.8, height: r * 1.8}, parent);
+    if (shape === 'diamond') return s('path', {d: 'M' + x + ',' + (y - r * 1.25) + 'L' + (x + r * 1.25) + ',' + y +
+      'L' + x + ',' + (y + r * 1.25) + 'L' + (x - r * 1.25) + ',' + y + 'Z'}, parent);
+    if (shape === 'triangle') return s('path', {d: 'M' + x + ',' + (y - r * 1.3) + 'L' + (x + r * 1.2) + ',' +
+      (y + r * .9) + 'L' + (x - r * 1.2) + ',' + (y + r * .9) + 'Z'}, parent);
+    return s('circle', {cx: x, cy: y, r: r}, parent);
+  }
+  function scatterMap(box, o){
+    var W = 1000, PAD = 40, SC = W - 2 * PAD;
+    function X(v){ return (PAD + v * SC).toFixed(1); }
+    if (o.layers.length > 1 || o.layers.some(function(l){ return l.marks.some(function(m){ return m.far; }); })){
+      var legend = h('div', 'viz-legend', null, box);
+      o.layers.forEach(function(l, k){
+        var it = h('span', 'it', null, legend);
+        var sw = s('svg', {width: 14, height: 14, viewBox: '0 0 14 14', 'class': 'mk-sw'}, it);
+        mark(l.shape || SHAPES[k % 4], 7, 7, 4.5, sw).setAttribute('class', 'mk l' + k);
+        h('span', null, l.label, it);
+      });
+      if (o.layers.some(function(l){ return l.marks.some(function(m){ return m.far; }); })){
+        var it2 = h('span', 'it', null, legend);
+        var sw2 = s('svg', {width: 14, height: 14, viewBox: '0 0 14 14', 'class': 'mk-sw'}, it2);
+        s('circle', {cx: 7, cy: 7, r: 4.5, 'class': 'mk far'}, sw2);
+        h('span', null, 'lejos de toda la investigación', it2);
+      }
+    }
+    var wrap = h('div', 'rmap-wrap', null, box);
+    var svg = s('svg', {viewBox: '0 0 ' + W + ' ' + W, 'class': 'rmap', role: 'img', 'aria-label': o.aria}, wrap);
+    var gs = s('g', {'class': 'secs'}, svg);
+    o.sectors.forEach(function(sec){
+      s('polygon', {points: sec.hull.map(function(p){ return X(p[0]) + ',' + X(p[1]); }).join(' '),
+                    'class': 'sec'}, gs);
+    });
+    var gu = s('g', {'class': 'units'}, svg);
+    o.units.forEach(function(u){
+      s('circle', {cx: X(u[0]), cy: X(u[1]), r: 2.4, 'class': 'u' + (u[3] === o.hiDs ? ' hi' : '')}, gu);
+    });
+    var gl = s('g', {'class': 'sec-labels'}, svg);
+    o.sectors.forEach(function(sec){
+      var t = s('text', {x: X(sec.cx), y: X(sec.cy), 'class': 'sec-l', 'text-anchor': 'middle'}, gl);
+      t.textContent = clip(sec.name, 34);
+    });
+    o.layers.forEach(function(l, k){
+      var g = s('g', {'class': 'marks'}, svg);
+      l.marks.forEach(function(m){
+        var el = mark(l.shape || SHAPES[k % 4], +X(m.x), +X(m.y), 7, g);
+        el.setAttribute('class', 'mk l' + k + (m.far ? ' far' : ''));
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('aria-label', m.lines.join('. '));
+        bindTip(el, function(){ return m.lines; });
+        activate(el, m.onClick ? function(){ hideTip(); m.onClick(); } : null);
+      });
+    });
+  }
+
   window.AtlasCharts = {coverageGrid: coverageGrid, sankey: sankey, smallMultiples: smallMultiples,
                         heatmap: heatmap, meterList: meterList, tableView: tableView,
+                        dotGrid: dotGrid, scatterMap: scatterMap,
                         hideTip: hideTip, clip: clip};
 })();

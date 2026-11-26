@@ -49,6 +49,28 @@ página lo carga al elegir el plan. Un plan nuevo necesita además su entrada en
 `atlas_profiles.PLANS` (nombre corto, rótulo de la pestaña, frase de
 validación); sin ella `build_atlas.py` avisa y no lo muestra.
 
+### Pestaña «Mapa»
+
+Un mapa 2D fijo de todos los proyectos y publicaciones (PUCP y ECOTEC),
+dividido en sectores temáticos, con los retos de cada plan encima
+(`scripts/analysis/research_map.py`). `rebuild_atlas.sh` coloca los retos en
+cada publicación (`research_map.py place` → `data/mapa.json`); un plan nuevo
+aparece solo.
+
+El mapa base (`salidas/topics/mapa/mapa_base.json`) se arma una sola vez y no se
+toca: si se rehiciera, cambiarían las posiciones. Rehacerlo solo si cambian las
+corridas publicadas. El servidor no tiene scikit-learn, así que el `fit` va en
+otra máquina:
+
+```bash
+python3 scripts/analysis/research_map.py export                      # servidor
+scp servidor:LibroBlanco/salidas/topics/mapa/unidades.* salidas/topics/mapa/
+python scripts/analysis/research_map.py fit                          # local (scikit-learn)
+scp salidas/topics/mapa/mapa_base.json servidor:LibroBlanco/salidas/topics/mapa/
+python3 scripts/analysis/research_map.py name                        # servidor (LLM)
+./scripts/analysis/rebuild_atlas.sh
+```
+
 `deploy_atlas.sh` copia `salidas/topics/atlas/` a una carpeta nueva en
 `/var/www/atlas-releases/<fecha>` y cambia el enlace `/var/www/atlas` de un
 golpe, así que nadie ve una versión a medias. Guarda las 3 últimas. Volver a

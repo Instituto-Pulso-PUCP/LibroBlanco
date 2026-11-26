@@ -40,4 +40,13 @@ for line in "${BUILDS[@]}"; do
   python3 scripts/analysis/build_atlas.py $args
 done
 
+# Pestaña «Mapa»: coloca los retos de cada plan sobre el mapa fijo de la
+# investigacion (research_map.py). Sin mapa base, la pestaña avisa y nada mas.
+if [ -f salidas/topics/mapa/mapa_base.json ] && [ -f salidas/topics/mapa/unidades.npz ]; then
+  echo "== mapa"
+  python3 scripts/analysis/research_map.py place
+else
+  echo "== mapa: falta salidas/topics/mapa/mapa_base.json (ver research_map.py); se omite" >&2
+fi
+
 ./scripts/analysis/deploy_atlas.sh

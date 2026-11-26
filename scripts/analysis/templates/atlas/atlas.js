@@ -10,6 +10,15 @@
   // archivo unico vienen todos incrustados (bundle.plans).
   var INLINE = JSON.parse(document.getElementById('bundle').textContent);
   var loaded = {}, ctrl = null, current = null, planHook = null;
+  // Mapa de la investigacion (pestaña «Mapa»): uno para todos los datasets, en
+  // data/mapa.json (research_map.py place). Se carga la primera vez que se abre.
+  var MAPA = null, MAPA_ERR = null, mapaReq = null;
+  function loadMap(){
+    if (!mapaReq) mapaReq = fetchJSON('data/mapa.json')
+      .then(function(M){ MAPA = M; })
+      .catch(function(err){ MAPA_ERR = err.message; });
+    return mapaReq;
+  }
   var msg = document.getElementById('loadmsg');
 
   function status(text){ msg.textContent = text || ''; msg.hidden = !text; }
@@ -152,7 +161,7 @@
   document.title = PF.title;
   document.getElementById('title').textContent = PF.title;
   document.getElementById('eyebrow').textContent = PF.eyebrow;
-  ['method', 'provenance', 'ceplan', 'summary'].forEach(function(id){
+  ['method', 'provenance', 'ceplan', 'summary', 'map'].forEach(function(id){
     var s = document.getElementById(id); s.textContent = ''; delete s.dataset.done;
   });
   var CH = window.AtlasCharts;
@@ -796,7 +805,7 @@
     document.querySelectorAll('#domains button').forEach(function(o){
       o.setAttribute('aria-pressed', String(o.dataset.sec === which));
     });
-    ['summary', 'topics', 'ceplan', 'about'].forEach(function(id){
+    ['summary', 'topics', 'ceplan', 'map', 'about'].forEach(function(id){
       document.getElementById(id).hidden = id !== which;
     });
     if (which === 'topics') paintTopicDom();
@@ -806,6 +815,7 @@
     showSection(which);
     if (which === 'summary') renderSummary();
     else if (which === 'ceplan') renderCeplan();
+    else if (which === 'map') renderMap();
     else if (which === 'about'){ renderMethod(); renderProvenance(); }
     else { renderMetrics(); renderList(); renderDetail(); }
   }
@@ -1150,6 +1160,8 @@
     });
     box.appendChild(seg);
 
+    renderRetoDots(box, ceplanDom);
+
     // reparto por ON
     var onKeys = Object.keys(CV.byOn).sort(function(a, b){ return CV.byOn[b] - CV.byOn[a]; });
     var total = onKeys.reduce(function(s, k){ return s + CV.byOn[k]; }, 0) || 1;
@@ -1191,6 +1203,144 @@
       });
       box.appendChild(blk);
     });
+  }
+
+  // Grafico 1: «¿cuanto trabajo cientifico responde a cada reto?». Las areas
+  // son las del propio plan (nivel 1 -> hoja) y cada punto es una unidad
+  // vinculada en los años elegidos.
+  function renderRetoDots(box, d){
+    var D = DATA[d], C = D.ceplan;
+    var c = card(box, 'Cuánto trabajo responde a cada ' + LEAF,
+      'Cada cuadro es una ' + LEAF + ' del ' + PL.name + ', todas del mismo tamaño y en el orden del plan; ' +
+      'cada punto es un' + (fem(D.noun) ? 'a ' : ' ') + D.noun + ' vinculad' + (fem(D.noun) ? 'a' : 'o') +
+      '. Un cuadro con pocos puntos es una ' + LEAF + ' que casi nadie trabaja. Haz clic en el nombre para ' +
+      'ver el detalle, o en un punto para abrir ' + (fem(D.noun) ? 'esa ' : 'ese ') + D.noun + '.');
+    var dotsBySub = {};
+    Object.keys(C.units).forEach(function(u){
+      if (!inYears(d, u)) return;
+      C.units[u].forEach(function(r){
+        (dotsBySub[r[0]] = dotsBySub[r[0]] || []).push({id: u, g: r[1], t: (D.units[u] || {}).t || u});
+      });
+    });
+    var groups = Object.keys(C.on).sort().map(function(on){
+      return {key: on, label: C.on[on], cells: Object.keys(C.subs)
+        .filter(function(k){ return C.subs[k].o === on; })
+        .sort(function(a, b){ return a.localeCompare(b, 'es', {numeric: true}); })
+        .map(function(k){
+          var dots = (dotsBySub[k] || []).sort(function(a, b){ return b.g - a.g; });
+          var n2 = dots.filter(function(x){ return x.g === 2; }).length;
+          return {id: k, label: C.subs[k].l, n2: n2, n1: dots.length - n2, dots: dots};
+        })};
+    });
+    CH.dotGrid(c, groups, {leaves: LEAVES, nouns: plural(D.noun),
+                           onCell: function(k){ gotoSub(d, k); }, onDot: function(u){ gotoUnit(d, u); }});
+    CH.tableView(c, [PL.level1_long, cap(LEAF), 'Relación clara', 'Tangencial'],
+      groups.reduce(function(acc, g){
+        return acc.concat(g.cells.map(function(x){ return [l1Short(C, g.key), x.label, x.n2, x.n1]; }));
+      }, []), [0, 0, 1, 1]);
+  }
+
+  // --- Mapa ---------------------------------------------------------------------
+  // Grafico 2: «¿que esta priorizando este conjunto de retos?». El mapa de la
+  // investigacion es fijo y comun a todos los datasets (research_map.py); cada
+  // reto cae donde esta la investigacion que mas se le parece.
+  var mapPlans = null;
+  function renderMap(){
+    var box = document.getElementById('map');
+    box.textContent = ''; CH.hideTip();
+    box.appendChild(el('h2', null, 'Qué prioriza cada conjunto de retos'));
+    if (!MAPA){
+      box.appendChild(el('p', 'note', MAPA_ERR ? 'No se pudo cargar el mapa (' + MAPA_ERR + ').' : 'Cargando el mapa…'));
+      if (!MAPA_ERR) loadMap().then(function(){ if (section === 'map') renderMap(); });
+      return;
+    }
+    var M = MAPA, keys = Object.keys(M.plans);
+    if (!mapPlans) mapPlans = keys.indexOf(planKey) >= 0 ? [planKey] : keys.slice(0, 1);
+    mapPlans = mapPlans.filter(function(k){ return keys.indexOf(k) >= 0; });
+    box.appendChild(el('p', 'desc', 'El fondo es fijo y el mismo para todos los planes: cada punto gris es un ' +
+      'proyecto o una publicación (PUCP y ECOTEC), junto a los más parecidos por su contenido, y las zonas son ' +
+      'áreas temáticas. Cada reto cae donde está la investigación que más se le parece. Así se ve en qué áreas ' +
+      'se concentra un plan y cuáles deja de lado. Puedes superponer varios planes.'));
+    var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Planes en el mapa');
+    keys.forEach(function(k){
+      var b = el('button', null, M.plans[k].short); b.type = 'button'; b.title = M.plans[k].name;
+      b.setAttribute('aria-pressed', String(mapPlans.indexOf(k) >= 0));
+      b.addEventListener('click', function(){
+        var i = mapPlans.indexOf(k);
+        if (i >= 0 && mapPlans.length > 1) mapPlans.splice(i, 1);
+        else if (i < 0) mapPlans.push(k);
+        renderMap();
+      });
+      seg.appendChild(b);
+    });
+    box.appendChild(seg);
+
+    var secName = {};
+    M.sectors.forEach(function(s){ secName[s.id] = s.name; });
+    var hiDs = M.datasets.indexOf(PF.id);
+    var c = card(box, 'Dónde caen los retos en el mapa de la investigación',
+      'Más oscuros, los puntos de ' + PF.label + '. Pasa el puntero por un reto para ver su área y la ' +
+      'investigación más cercana; en uno del plan elegido arriba, haz clic para abrirlo en «Retos».');
+    var layers = mapPlans.map(function(k){
+      var P = M.plans[k];
+      var dom = k === planKey ? PF.order.filter(function(d){ return DATA[d].ceplan; })[0] : null;
+      return {key: k, label: P.short, marks: P.retos.map(function(r){
+        return {x: r.x, y: r.y, far: r.far,
+                lines: [r.l, P.short + ' · ' + (P.l1[r.o] || r.o), 'Área: ' + secName[r.s],
+                        'Similitud con la investigación más cercana: ' + r.sim.toFixed(2),
+                        r.near.length ? 'Más cercana: ' + CH.clip(r.near[0], 90) : ''],
+                onClick: dom ? function(){ gotoSub(dom, r.id); } : null};
+      })};
+    });
+    CH.scatterMap(c, {sectors: M.sectors, units: M.units, hiDs: hiDs, layers: layers,
+                      aria: 'Mapa de la investigación con los retos de ' +
+                            layers.map(function(l){ return l.label; }).join(', ')});
+
+    // Reparto por area: retos de cada plan frente a la investigacion.
+    var c2 = card(box, 'Qué áreas prioriza cada plan',
+      'Porcentaje de los retos de cada plan que cae en cada área, junto al porcentaje de la investigación ' +
+      '(proyectos y publicaciones de PUCP y ECOTEC) que hay en ella. Un área con muchos retos y poca ' +
+      'investigación es una prioridad del plan que la investigación apenas cubre.');
+    var nUnits = M.units.length, unitsBy = {};
+    M.units.forEach(function(u){ unitsBy[u[2]] = (unitsBy[u[2]] || 0) + 1; });
+    var share = {};
+    mapPlans.forEach(function(k){
+      var P = M.plans[k], by = {};
+      P.retos.forEach(function(r){ by[r.s] = (by[r.s] || 0) + 1; });
+      share[k] = {by: by, n: P.retos.length};
+    });
+    var order = M.sectors.slice().sort(function(a, b){
+      var k = mapPlans[0];
+      return ((share[k].by[b.id] || 0) - (share[k].by[a.id] || 0)) || (unitsBy[b.id] - unitsBy[a.id]);
+    });
+    var wrap = el('div', 'tablewrap'), tbl = el('table');
+    tbl.innerHTML = '<thead><tr><th>Área</th>' + mapPlans.map(function(k){
+      return '<th class="c">' + esc(M.plans[k].short) + '<span class="hint">% de sus retos</span></th>';
+    }).join('') + '<th class="c">Investigación<span class="hint">% de las unidades</span></th></tr></thead>';
+    var tb = el('tbody');
+    order.forEach(function(sct){
+      var tr = el('tr'), td = el('td');
+      td.appendChild(el('b', null, sct.name));
+      td.appendChild(el('span', 'unit-meta', sct.topics.slice(0, 3).map(function(t){ return t[0]; }).join(' · ')));
+      tr.appendChild(td);
+      mapPlans.forEach(function(k){
+        var n = share[k].by[sct.id] || 0, cell = barCell('c', n / share[k].n, 1);
+        cell.title = n + ' de ' + share[k].n + ' ' + M.plans[k].leaves;
+        tr.appendChild(cell);
+      });
+      tr.appendChild(barCell('k', (unitsBy[sct.id] || 0) / nUnits, 1));
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); wrap.appendChild(tbl); c2.appendChild(wrap);
+    CH.tableView(c2, ['Plan', 'Reto', 'Área', 'Similitud con la más cercana'],
+      mapPlans.reduce(function(acc, k){
+        return acc.concat(M.plans[k].retos.map(function(r){
+          return [M.plans[k].short, r.l, secName[r.s], r.sim.toFixed(2)];
+        }));
+      }, []), [0, 0, 0, 1]);
+    box.appendChild(el('p', 'note', 'Mapa: ' + M.params.method + ' sobre los embeddings de ' +
+      nUnits.toLocaleString('es') + ' unidades (semilla fija, versión ' + M.version + '). Cada reto va al ' +
+      'promedio, ponderado por similitud, de la posición de sus ' + M.params.k + ' unidades más parecidas.'));
   }
 
   function subRow(d, sid){
@@ -1590,6 +1740,8 @@
     if (section === 'ceplan') renderCeplan();
     if (section === 'summary') renderSummary();
     if (section === 'about') renderMethod();
+    mapPlans = null;   // el mapa pasa a mostrar el plan recien elegido
+    if (section === 'map') renderMap();
     if (!omniRes.hidden) omniRender();
   };
   }
